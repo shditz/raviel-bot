@@ -1,0 +1,20 @@
+{
+  "name": "shira-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@fadzzzdigital-corp/baileys": "github:FallEzz/baileys-corp",
+    "dotenv": "^17.4.2",
+    "libsignal": "^2.0.1",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
