@@ -107,6 +107,10 @@ async function connectToWhatsApp() {
       try {
         let code = await sock.requestPairingCode(phoneNumber);
         code = code?.match(/.{1,4}/g)?.join("-") || code;
+        
+        // Simpan ke file agar mudah dibaca di cPanel
+        fs.writeFileSync(path.join(__dirname, "pairing_code.txt"), code);
+
         console.log("\n" + "=".repeat(30));
         console.log(`🔑 KODE PAIRING KAMU: ${code}`);
         console.log("=".repeat(30) + "\n");
