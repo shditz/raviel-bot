@@ -1,34 +1,72 @@
 const fs = require("fs");
 const path = require("path");
+const ffmpeg = require("ffmpeg-static");
+process.env.FFMPEG_PATH = ffmpeg;
 const pino = require("pino");
 const {
   default: makeWASocket,
   DisconnectReason,
   delay,
   useMultiFileAuthState,
-} = require("@fadzzzdigital-corp/baileys");
+  makeCacheableSignalKeyStore,
+  makeInMemoryStore,
+  Browsers,
+} = require("lilys-baileys");
 const config = require("./config");
 const { sendMenuWithImage } = require("./handlers/menu");
-const { getUser, registerUser, isRegistered } = require("./database/db");
+const { getUser, registerUser, isRegistered, getGroup, updateGroup, addWarn, resetWarn, getTotalUsers, getTotalGroups } = require("./database/db");
+const { normalizeJid, isAdmin } = require("./utils/jid");
+const canvafy = require("canvafy");
+
+const commands = new Map();
+const commandFiles = fs.readdirSync(path.join(__dirname, "commands")).filter(f => f.endsWith(".js"));
+for (const file of commandFiles) {
+  const cmd = require(`./commands/${file}`);
+  commands.set(cmd.name, cmd);
+}
 
 const AUTH_DIR = path.join(__dirname, "auth");
 if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
 
-const logger = pino({ level: "silent" });
+// Gunakan logger fatal agar terminal benar-benar bersih dari log internal baileys yang tidak penting
+const logger = pino({ level: "fatal" });
 const PREFIX = config.prefix;
+
+// Inisialisasi in-memory store untuk caching Baileys (mempercepat bot)
+const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store" }) });
+store.readFromFile("./auth/baileys_store_multi.json");
+setInterval(() => {
+  store.writeToFile("./auth/baileys_store_multi.json");
+}, 10_000);
 
 const _origError = console.error;
 const _origWarn = console.warn;
-console.error = (...args) => {
-  const s = String(args[0] || "");
-  if (s.includes("Failed to decrypt") || s.includes("Bad MAC") || s.includes("Session error")) return;
-  _origError.apply(console, args);
+const _origLog = console.log;
+const _origInfo = console.info;
+const _origDebug = console.debug;
+
+const filterLog = (origFunc, args) => {
+  const s = String(args.join(" ")).toLowerCase();
+  if (
+    s.includes("newsletter") ||
+    s.includes("closing open session") ||
+    s.includes("closing session") ||
+    s.includes("sessionentry") ||
+    s.includes("failed to decrypt") ||
+    s.includes("bad mac") ||
+    s.includes("session error") ||
+    s.includes("timed out")
+  ) {
+    return;
+  }
+  origFunc.apply(console, args);
 };
-console.warn = (...args) => {
-  const s = String(args[0] || "");
-  if (s.includes("closed session")) return;
-  _origWarn.apply(console, args);
-};
+
+console.log = (...args) => filterLog(_origLog, args);
+console.info = (...args) => filterLog(_origInfo || _origLog, args);
+console.debug = (...args) => filterLog(_origDebug || _origLog, args);
+console.error = (...args) => filterLog(_origError, args);
+console.warn = (...args) => filterLog(_origWarn, args);
 
 process.on("uncaughtException", (err) => {
   if (err.message?.includes("Bad MAC")) return;
@@ -61,6 +99,8 @@ function extractText(msg) {
 
   if (content.conversation) return content.conversation;
   if (content.extendedTextMessage?.text) return content.extendedTextMessage.text;
+  if (content.imageMessage?.caption) return content.imageMessage.caption;
+  if (content.videoMessage?.caption) return content.videoMessage.caption;
 
   if (content.interactiveResponseMessage) {
     try {
@@ -89,21 +129,33 @@ async function connectToWhatsApp() {
   const usePairingCode = !!process.env.PAIRING_NUMBER;
 
   const sock = makeWASocket({
-    printQRInTerminal: !usePairingCode, // Matikan QR jika pakai pairing code
+    printQRInTerminal: true, // HARUS true agar sistem bawaan lilys-baileys tidak memunculkan prompt (Masukan Nomornya) yang membuat bot nge-stuck!
     logger,
-    browser: ["Ubuntu", "Chrome", "20.0.04"],
-    auth: state,
+    browser: ["Ubuntu", "Chrome", "20.0.04"], // Menggunakan format bawaan yang paling stabil di Baileys ini
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger), // SANGAT PENTING: Mencegah Bad MAC & Session Error yang berujung Logged Out
+    },
     syncFullHistory: false,
-    markOnlineOnConnect: true,
-    getMessage: async () => undefined,
+    markOnlineOnConnect: false, // Cegah WA memutus koneksi di awal
+    generateHighQualityLinkPreview: false, // Hemat RAM dan performa
+    getMessage: async () => {
+      return { conversation: "pesan" }; // Mencegah bot crash jika histori pesan tidak sinkron
+    },
   });
 
+  store.bind(sock.ev);
+
   // Jika menggunakan Pairing Code dan belum login
-  if (usePairingCode && !sock.authState.creds.registered) {
+  if (usePairingCode && !state.creds.me) {
     const phoneNumber = process.env.PAIRING_NUMBER.replace(/[^0-9]/g, "");
     
     // Tunggu sebentar agar socket siap
     setTimeout(async () => {
+      // CEK VITAL: Jika di pertengahan waktu tunggu ternyata bot sudah berhasil login/konek, batalkan request!
+      // Meminta pairing code pada sesi yang sudah terhubung akan memicu pemutusan sepihak oleh server WA (Log Out 401)
+      if (sock.authState.creds.me) return;
+
       try {
         let code = await sock.requestPairingCode(phoneNumber);
         code = code?.match(/.{1,4}/g)?.join("-") || code;
@@ -142,10 +194,18 @@ async function connectToWhatsApp() {
       const code = lastDisconnect?.error?.output?.statusCode;
       if (code !== DisconnectReason.loggedOut) {
         console.log(`🔄 Reconnecting... (code: ${code})`);
-        await delay(3000);
+        
+        // Cegah memory leak dari socket lama
+        sock.ev.removeAllListeners();
+        
+        await delay(5000); // Jeda 5 detik agar tidak spam reconnect dan menghindari code 401
         connectToWhatsApp();
       } else {
-        console.log("❌ Logged out. Hapus folder auth/ lalu jalankan ulang.");
+        console.log("❌ Logged out. Menghapus folder auth dan restart otomatis...");
+        if (fs.existsSync(AUTH_DIR)) {
+          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        }
+        process.exit(1); // Keluar agar process manager (seperti PM2 atau nodemon) me-restart ulang dengan bersih
       }
     }
 
@@ -159,16 +219,82 @@ async function connectToWhatsApp() {
     }
   });
 
+  // ============================================================
+  // Event Grup (Welcome / Leave)
+  // ============================================================
+  sock.ev.on("group-participants.update", async (update) => {
+    try {
+      const { id, participants, action } = update;
+      const groupInfo = getGroup(id);
+      if (!groupInfo) return;
+
+      let metadata;
+      try { metadata = await sock.groupMetadata(id); } catch { return; }
+      const groupName = metadata.subject;
+      const memberCount = metadata.participants.length;
+
+      for (const participant of participants) {
+        const isWelcome = action === "add";
+        const template = isWelcome ? groupInfo.welcomeMessage : groupInfo.leaveMessage;
+        if (!template) continue;
+
+        let ppUrl;
+        try { ppUrl = await sock.profilePictureUrl(participant, "image"); }
+        catch { ppUrl = "https://i.ibb.co/1s8T3sY/48f7ce63c7aa.jpg"; }
+
+        const caption = template
+          .replace(/@user/g, `@${participant.split("@")[0]}`)
+          .replace(/@group/g, groupName);
+
+        const image = await new canvafy.WelcomeLeave()
+          .setAvatar(ppUrl)
+          .setBackground("image", "https://img.freepik.com/free-photo/abstract-luxury-gradient-blue-background-smooth-dark-blue-with-black-vignette_1258-54470.jpg")
+          .setTitle(isWelcome ? "Welcome!" : "Goodbye!")
+          .setDescription(isWelcome
+            ? `Selamat bergabung di ${groupName}! 🎉`
+            : `Sampai jumpa lagi! 👋`)
+          .setMember(`Member ke-${memberCount}`)
+          .setBorder(isWelcome ? "#00d4ff" : "#ff4757")
+          .setAvatarBorder(isWelcome ? "#00d4ff" : "#ff4757")
+          .setOverlayOpacity(0.3)
+          .build();
+
+        await sock.sendMessage(id, { image, caption, mentions: [participant] });
+      }
+    } catch (err) {
+      console.error("Gagal mengirim welcome/leave:", err);
+    }
+  });
+
   sock.ev.on("messages.upsert", async ({ messages }) => {
     try {
       if (!messages?.length) return;
       const m = messages[0];
-      if (!m?.message) return;
-      if (m.key.fromMe) return;
-      if (m.key.remoteJid === "status@broadcast") return;
-
+      
       const jid = m.key.remoteJid;
+      if (jid === "status@broadcast") return;
+
       const text = extractText(m.message).trim();
+
+      const isGroup = jid.endsWith("@g.us");
+
+      if (!m?.message) return;
+
+      const botId = normalizeJid(sock.user.id);
+      let sender = m.key.fromMe ? botId : normalizeJid(m.key.participant || m.key.remoteJid);
+
+      if (isGroup && text.match(/(chat\.whatsapp\.com\/)/gi)) {
+        const groupInfo = getGroup(jid) || {};
+        if (groupInfo.antiLink) {
+          const gm = await sock.groupMetadata(jid);
+          if (!isAdmin(gm, sender) && isAdmin(gm, botId)) {
+            await sock.sendMessage(jid, { delete: m.key });
+            await sock.sendMessage(jid, { text: `⚠️ Link terdeteksi! @${sender.split("@")[0]} dikeluarkan.`, mentions: [sender] });
+            await sock.groupParticipantsUpdate(jid, [sender], "remove");
+            return;
+          }
+        }
+      }
 
       if (!text || !text.startsWith(PREFIX)) return;
 
@@ -177,14 +303,12 @@ async function connectToWhatsApp() {
       const args = rawCmd.split(/\s+/);
       const cmd = args.shift().toLowerCase();
 
-      const isGroup = jid.endsWith("@g.us");
-      console.log(`📩 [${isGroup ? "GRUP" : "DM"}] ${text}`);
 
-      await sock.sendPresenceUpdate("composing", jid);
+      console.log(`📩 [${isGroup ? "GRUP" : "DM"}] ${text}`);
 
       // === Cek registrasi (kecuali command daftar) ===
       if (cmd !== "daftar" && cmd !== "register") {
-        if (!isRegistered(jid)) {
+        if (!isRegistered(sender)) {
           await sock.sendMessage(jid, {
             text:
               `⚠️ *Kamu belum terdaftar!*\n\n` +
@@ -193,131 +317,26 @@ async function connectToWhatsApp() {
               `│ Format: *${PREFIX}daftar nama#umur*\n` +
               `│ Contoh: *${PREFIX}daftar Budi#17*\n` +
               `└─────────────────`,
-          });
+          }, { quoted: m });
           return;
         }
       }
 
       // === Proses command ===
-      switch (cmd) {
-        // ─── REGISTRASI ───────────────────────
-        case "daftar":
-        case "register": {
-          if (isRegistered(jid)) {
-            const u = getUser(jid);
-            await sock.sendMessage(jid, {
-              text:
-                `✅ Kamu sudah terdaftar!\n\n` +
-                `┌─────────────────\n` +
-                `│ 📛 *${u.name}*\n` +
-                `│ 🎂 ${u.age} tahun\n` +
-                `│ 📅 ${new Date(u.registeredAt).toLocaleDateString("id-ID")}\n` +
-                `└─────────────────\n\n` +
-                `Ketik *${PREFIX}menu* untuk mulai.`,
-            });
-            return;
-          }
-
-          const input = args.join(" "); 
-          if (!input || !input.includes("#")) {
-            await sock.sendMessage(jid, {
-              text:
-                `❌ *Format salah!*\n\n` +
-                `┌─────────────────\n` +
-                `│ Gunakan: *${PREFIX}daftar nama#umur*\n` +
-                `│ Contoh : *${PREFIX}daftar Budi#17*\n` +
-                `└─────────────────`,
-            });
-            return;
-          }
-
-          const [name, ageStr] = input.split("#");
-          const age = parseInt(ageStr);
-          if (!name.trim() || isNaN(age) || age < 1 || age > 100) {
-            await sock.sendMessage(jid, {
-              text: `❌ Nama atau umur tidak valid. Umur harus angka 1-100.`,
-            });
-            return;
-          }
-
-          const user = registerUser(jid, name.trim(), age);
-          await sock.sendMessage(jid, {
-            text:
-              `✅ *Registrasi berhasil!*\n\n` +
-              `╭━━━━━━━━━━━━━━━━━╮\n` +
-              `┃ 📛 Nama : *${user.name}*\n` +
-              `┃ 🎂 Umur : *${user.age} tahun*\n` +
-              `┃ 📅 Tanggal: *${new Date(user.registeredAt).toLocaleDateString("id-ID")}*\n` +
-              `╰━━━━━━━━━━━━━━━━━╯\n\n` +
-              `Sekarang kamu bisa menggunakan bot.\n` +
-              `Ketik *${PREFIX}menu* untuk melihat menu.`,
-          });
-          break;
+      const command = commands.get(cmd) || Array.from(commands.values()).find(c => c.aliases?.includes(cmd));
+      
+      if (command) {
+        try {
+          await command.execute(sock, m, args, { jid, sender, isGroup, botId, PREFIX, config, getUser, registerUser, isRegistered, getGroup, updateGroup, addWarn, resetWarn, getTotalUsers, getTotalGroups, commands });
+        } catch (err) {
+          console.error(`Error pada command ${cmd}:`, err);
+          await sock.sendMessage(jid, { text: `❌ Terjadi kesalahan saat menjalankan perintah.` }, { quoted: m });
         }
-
-        // ─── MENU ─────────────────────────────
-        case "menu":
-        case "help":
-          await sendMenuWithImage(sock, jid);
-          break;
-
-        // ─── OWNER ────────────────────────────
-        case "owner":
-          await sock.sendMessage(jid, {
-            text:
-              `╭━━━━ 👑 *Owner* ━━━━╮\n` +
-              `┃\n` +
-              `┃ 📛 Nama   : *${config.ownerName}*\n` +
-              `┃ 📱 Nomor  : *+${config.ownerNumber}*\n` +
-              `┃ 🤖 Bot    : *${config.botName}*\n` +
-              `┃\n` +
-              `╰━━━━━━━━━━━━━━━━━━━╯\n\n` +
-              `_Ketik *${PREFIX}menu* untuk kembali._`,
-          });
-          break;
-
-        // ─── PING ─────────────────────────────
-        case "ping": {
-          const start = Date.now();
-          await sock.sendMessage(jid, {
-            text: `🏓 *Pong!*  _${Date.now() - start}ms_\n⚡ Bot aktif dan siap melayani.`,
-          });
-          break;
-        }
-
-        // ─── PROFIL ───────────────────────────
-        case "profil":
-        case "profile":
-        case "me": {
-          const u = getUser(jid);
-          if (!u) {
-            await sock.sendMessage(jid, { text: `❌ Data tidak ditemukan.` });
-            return;
-          }
-          await sock.sendMessage(jid, {
-            text:
-              `╭━━━━ 👤 *Profil* ━━━━╮\n` +
-              `┃\n` +
-              `┃ 📛 Nama : *${u.name}*\n` +
-              `┃ 🎂 Umur : *${u.age} tahun*\n` +
-              `┃ 📅 Sejak: *${new Date(u.registeredAt).toLocaleDateString("id-ID")}*\n` +
-              `┃\n` +
-              `╰━━━━━━━━━━━━━━━━━━━╯`,
-          });
-          break;
-        }
-
-        // ─── COMMAND TIDAK DIKENAL ────────────
-        default:
-          await sock.sendMessage(jid, {
-            text:
-              `❓ Command *${PREFIX}${cmd}* tidak ditemukan.\n` +
-              `Ketik *${PREFIX}menu* untuk melihat daftar perintah.`,
-          });
-          break;
+      } else {
+        await sock.sendMessage(jid, {
+          text: `❓ Command *${PREFIX}${cmd}* tidak ditemukan.\nKetik *${PREFIX}menu* untuk melihat daftar perintah.`
+        }, { quoted: m });
       }
-
-      await sock.sendPresenceUpdate("paused", jid);
     } catch (err) {
       if (!err.message?.includes("Bad MAC") && !err.message?.includes("decrypt")) {
         _origError("⚠️ Error:", err.message);

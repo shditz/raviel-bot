@@ -1,4 +1,4 @@
-const {default: makeInMemoryStore} = require("@fadzzzdigital-corp/baileys");
+const {default: makeInMemoryStore} = require("lilys-baileys");
 
 module.exports = (config) => {
   const store = makeInMemoryStore(config);
