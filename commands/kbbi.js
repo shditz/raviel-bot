@@ -1,46 +1,77 @@
+const {LRUCache} = require("../utils/cache");
+
+// Simple cache for KBBI results (5 minutes TTL)
+const kbbiCache = new LRUCache(100, 300000);
+
 module.exports = {
   name: "kbbi",
   description: "Mencari definisi kata di KBBI. Gunakan: !kbbi <kata>",
-  async execute(sock, m, args, { jid }) {
+  async execute(sock, m, args, {jid}) {
     const query = args.join(" ").toLowerCase().trim();
     if (!query) {
-      return await sock.sendMessage(jid, { text: "❌ Masukkan kata yang ingin dicari! Contoh: !kbbi rumah" }, { quoted: m });
+      return await sock.sendMessage(
+        jid,
+        {text: "❌ Masukkan kata yang ingin dicari! Contoh: !kbbi rumah"},
+        {quoted: m},
+      );
     }
 
     try {
-      // Gunakan API KBBI publik yang stabil
-      const res = await fetch(`https://api.lolhuman.xyz/api/kbbi?apikey=GatauDeh&query=${encodeURIComponent(query)}`);
+      // OPTIMIZATION: Check cache first
+      const cacheKey = `kbbi:${query}`;
+      const cachedResult = kbbiCache.get(cacheKey);
+      if (cachedResult) {
+        return await sock.sendMessage(jid, {text: cachedResult}, {quoted: m});
+      }
+
+      // OPTIMIZATION: Use Promise.race() to fetch from fastest API (parallel, not sequential!)
+      const api1 = fetch(
+        `https://api.lolhuman.xyz/api/kbbi?apikey=GatauDeh&query=${encodeURIComponent(query)}`,
+        {
+          signal: AbortSignal.timeout(5000), // 5 second timeout
+        },
+      ).then((r) => (r.ok ? r.json() : Promise.reject("API1 failed")));
+
+      const api2 = fetch(
+        `https://kbbi-api-zhirrr.vercel.app/api/kbbi?text=${encodeURIComponent(query)}`,
+        {
+          signal: AbortSignal.timeout(5000),
+        },
+      ).then((r) => {
+        if (!r.ok) return Promise.reject("API2 failed");
+        const contentType = r.headers.get("content-type") || "";
+        if (!contentType.includes("application/json"))
+          return Promise.reject("Invalid content type");
+        return r.json();
+      });
+
+      // Race both APIs - whoever responds first wins!
+      const data = await Promise.race([api1, api2]).catch(() => {
+        // Both failed, try them sequentially as last resort
+        return Promise.allSettled([api1, api2]).then((results) => {
+          const succeeded = results.find((r) => r.status === "fulfilled");
+          if (succeeded) return succeeded.value;
+          throw new Error("All APIs failed");
+        });
+      });
 
       let result = null;
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 200 && data.result) {
-          result = data.result;
-        }
-      }
-
-      // Fallback: coba endpoint alternatif
-      if (!result) {
-        const res2 = await fetch(`https://kbbi-api-zhirrr.vercel.app/api/kbbi?text=${encodeURIComponent(query)}`);
-        if (res2.ok) {
-          const contentType = res2.headers.get("content-type") || "";
-          if (contentType.includes("application/json")) {
-            const data2 = await res2.json();
-            if (data2 && data2.result && data2.result !== "Tidak ditemukan") {
-              result = data2.result;
-            }
-          }
-        }
+      if (data?.result) {
+        result = data.result;
+      } else if (data?.data?.result) {
+        result = data.data.result;
       }
 
       if (!result) {
-        return await sock.sendMessage(jid, { text: `❌ Kata *${query}* tidak ditemukan dalam KBBI.` }, { quoted: m });
+        return await sock.sendMessage(
+          jid,
+          {text: `❌ Kata *${query}* tidak ditemukan dalam KBBI.`},
+          {quoted: m},
+        );
       }
 
       // Format output
-      let body = `📖 *KBBI - Kamus Besar Bahasa Indonesia*\n\n` +
-                 `🔎 *Kata:* ${query}\n\n`;
+      let body = `📖 *KBBI - Kamus Besar Bahasa Indonesia*\n\n` + `🔎 *Kata:* ${query}\n\n`;
 
       if (Array.isArray(result)) {
         result.forEach((def, i) => {
@@ -53,11 +84,17 @@ module.exports = {
         body += `📝 *Arti:*\n${JSON.stringify(result, null, 2)}`;
       }
 
-      await sock.sendMessage(jid, { text: body }, { quoted: m });
+      // OPTIMIZATION: Cache the result
+      kbbiCache.set(cacheKey, body);
 
+      await sock.sendMessage(jid, {text: body}, {quoted: m});
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, { text: "❌ Terjadi kesalahan saat mengambil data KBBI." }, { quoted: m });
+      await sock.sendMessage(
+        jid,
+        {text: "❌ Terjadi kesalahan saat mengambil data KBBI."},
+        {quoted: m},
+      );
     }
-  }
+  },
 };

@@ -1,5 +1,5 @@
 const config = require("../config");
-const { getUser } = require("../database/db");
+const {getUser} = require("../database/db");
 
 const PREFIX = config.prefix;
 
@@ -7,73 +7,102 @@ const mainMenuButton = [
   {
     name: "single_select",
     buttonParamsJson: JSON.stringify({
-      title: "📋 Buka Menu",
+      title: "Buka Menu",
       sections: [
         {
           title: "INFORMASI",
           rows: [
-            { title: `${PREFIX}owner`, id: `${PREFIX}owner` },
-            { title: `${PREFIX}profil`, id: `${PREFIX}profil` },
-            { title: `${PREFIX}kbbi`, id: `${PREFIX}kbbi` },
-            { title: `${PREFIX}wiki`, id: `${PREFIX}wiki` },
-            { title: `${PREFIX}cuaca`, id: `${PREFIX}cuaca` },
-            { title: `${PREFIX}cuacaalert`, id: `${PREFIX}cuacaalert` },
-            { title: `${PREFIX}gempa`, id: `${PREFIX}gempa` },
+            {title: `${PREFIX}owner`, id: `${PREFIX}owner`},
+            {title: `${PREFIX}profil`, id: `${PREFIX}profil`},
+            {title: `${PREFIX}cuaca`, id: `${PREFIX}cuaca`},
+            {title: `${PREFIX}cuacaalert`, id: `${PREFIX}cuacaalert`},
+            {title: `${PREFIX}gempa`, id: `${PREFIX}gempa`},
+          ],
+        },
+        {
+          title: "SEARCH",
+          rows: [
+            {title: `${PREFIX}kbbi`, id: `${PREFIX}kbbi`},
+            {title: `${PREFIX}wiki`, id: `${PREFIX}wiki`},
+            {title: `${PREFIX}lirik`, id: `${PREFIX}lirik`},
+            {title: `${PREFIX}pinterest`, id: `${PREFIX}pinterest`},
+            {title: `${PREFIX}yaho`, id: `${PREFIX}yaho`},
+            {title: `${PREFIX}lahelu`, id: `${PREFIX}lahelu`},
           ],
         },
         {
           title: "GRUP",
           rows: [
-            { title: `${PREFIX}setwelcome`, id: `${PREFIX}setwelcome` },
-            { title: `${PREFIX}setleave`, id: `${PREFIX}setleave` },
-            { title: `${PREFIX}promote`, id: `${PREFIX}promote` },
-            { title: `${PREFIX}demote`, id: `${PREFIX}demote` },
-            { title: `${PREFIX}kick`, id: `${PREFIX}kick` },
-            { title: `${PREFIX}tagall`, id: `${PREFIX}tagall` },
-            { title: `${PREFIX}hidetag`, id: `${PREFIX}hidetag` },
-            { title: `${PREFIX}groupinfo`, id: `${PREFIX}groupinfo` },
-            { title: `${PREFIX}linkgroup`, id: `${PREFIX}linkgroup` },
-            { title: `${PREFIX}warn`, id: `${PREFIX}warn` },
-            { title: `${PREFIX}antilink`, id: `${PREFIX}antilink` },
+            {title: `${PREFIX}setwelcome`, id: `${PREFIX}setwelcome`},
+            {title: `${PREFIX}setleave`, id: `${PREFIX}setleave`},
+            {title: `${PREFIX}promote`, id: `${PREFIX}promote`},
+            {title: `${PREFIX}demote`, id: `${PREFIX}demote`},
+            {title: `${PREFIX}kick`, id: `${PREFIX}kick`},
+            {title: `${PREFIX}tagall`, id: `${PREFIX}tagall`},
+            {title: `${PREFIX}hidetag`, id: `${PREFIX}hidetag`},
+            {title: `${PREFIX}groupinfo`, id: `${PREFIX}groupinfo`},
+            {title: `${PREFIX}linkgroup`, id: `${PREFIX}linkgroup`},
+            {title: `${PREFIX}warn`, id: `${PREFIX}warn`},
+            {title: `${PREFIX}antilink`, id: `${PREFIX}antilink`},
           ],
         },
         {
           title: "ISLAMI",
           rows: [
-            { title: `${PREFIX}sholat`, id: `${PREFIX}sholat` },
-            { title: `${PREFIX}quran`, id: `${PREFIX}quran` },
+            {title: `${PREFIX}sholat`, id: `${PREFIX}sholat`},
+            {title: `${PREFIX}quran`, id: `${PREFIX}quran`},
           ],
         },
         {
           title: "TOOLS",
           rows: [
-            { title: `${PREFIX}sticker`, id: `${PREFIX}sticker` },
-            { title: `${PREFIX}removebg`, id: `${PREFIX}removebg` },
-            { title: `${PREFIX}tr`, id: `${PREFIX}tr` },
-            { title: `${PREFIX}tts`, id: `${PREFIX}tts` },
-            { title: `${PREFIX}ai`, id: `${PREFIX}ai` },
-            { title: `${PREFIX}kalkulator`, id: `${PREFIX}kalkulator` },
+            {title: `${PREFIX}sticker`, id: `${PREFIX}sticker`},
+            {title: `${PREFIX}removebg`, id: `${PREFIX}removebg`},
+            {title: `${PREFIX}tts`, id: `${PREFIX}tts`},
+            {title: `${PREFIX}kalkulator`, id: `${PREFIX}kalkulator`},
+          ],
+        },
+        {
+          title: "AI",
+          rows: [
+            {title: `${PREFIX}tr`, id: `${PREFIX}tr`},
+            {title: `${PREFIX}summarize`, id: `${PREFIX}summarize`},
+            {title: `${PREFIX}paraphrase`, id: `${PREFIX}paraphrase`},
+            {title: `${PREFIX}expand`, id: `${PREFIX}expand`},
+            {title: `${PREFIX}grammar`, id: `${PREFIX}grammar`},
+            {title: `${PREFIX}dracintts`, id: `${PREFIX}dracintts`},
+            {title: `${PREFIX}geminiai`, id: `${PREFIX}geminiai`},
+            {title: `${PREFIX}gptai`, id: `${PREFIX}gptai`},
+            {title: `${PREFIX}deepseekai`, id: `${PREFIX}deepseekai`},
+            {title: `${PREFIX}quillbot`, id: `${PREFIX}quillbot`},
           ],
         },
         {
           title: "DOWNLOADER",
           rows: [
-            { title: `${PREFIX}tiktok`, id: `${PREFIX}tiktok` },
-            { title: `${PREFIX}ig`, id: `${PREFIX}ig` },
-            { title: `${PREFIX}ytmp3`, id: `${PREFIX}ytmp3` },
-            { title: `${PREFIX}ytmp4`, id: `${PREFIX}ytmp4` },
-            { title: `${PREFIX}fb`, id: `${PREFIX}fb` },
-            { title: `${PREFIX}twitter`, id: `${PREFIX}twitter` },
-            { title: `${PREFIX}spotify`, id: `${PREFIX}spotify` },
+            {title: `${PREFIX}tiktok`, id: `${PREFIX}tiktok`},
+            {title: `${PREFIX}ig`, id: `${PREFIX}ig`},
+            {title: `${PREFIX}ytmp3`, id: `${PREFIX}ytmp3`},
+            {title: `${PREFIX}ytmp4`, id: `${PREFIX}ytmp4`},
+            {title: `${PREFIX}fb`, id: `${PREFIX}fb`},
+            {title: `${PREFIX}twitter`, id: `${PREFIX}twitter`},
+            {title: `${PREFIX}spotify`, id: `${PREFIX}spotify`},
           ],
         },
         {
           title: "BOT",
           rows: [
-            { title: `${PREFIX}ping`, id: `${PREFIX}ping` },
-            { title: `${PREFIX}speed`, id: `${PREFIX}speed` },
-            { title: `${PREFIX}runtime`, id: `${PREFIX}runtime` },
-            { title: `${PREFIX}status`, id: `${PREFIX}status` },
+            {title: `${PREFIX}ping`, id: `${PREFIX}ping`},
+            {title: `${PREFIX}speed`, id: `${PREFIX}speed`},
+            {title: `${PREFIX}runtime`, id: `${PREFIX}runtime`},
+            {title: `${PREFIX}status`, id: `${PREFIX}status`},
+          ],
+        },
+        {
+          title: "OWNER",
+          rows: [
+            {title: `${PREFIX}whitelist`, id: `${PREFIX}whitelist`},
+            {title: `${PREFIX}botmode`, id: `${PREFIX}botmode`},
           ],
         },
       ],
@@ -81,14 +110,11 @@ const mainMenuButton = [
   },
 ];
 
-
 async function sendMenuWithImage(sock, jid, sender) {
   const user = getUser(sender);
   const userName = user ? user.name : "User";
   const userAge = user ? `${user.age} tahun` : "-";
-  const userSince = user
-    ? new Date(user.registeredAt).toLocaleDateString("id-ID")
-    : "-";
+  const userSince = user ? new Date(user.registeredAt).toLocaleDateString("id-ID") : "-";
 
   const isGroup = jid.endsWith("@g.us");
 
@@ -140,11 +166,17 @@ async function sendMenuWithImage(sock, jid, sender) {
       `┃  *INFORMASI*`,
       `┃ ├ • *${PREFIX}owner*`,
       `┃ ├ • *${PREFIX}profil*`,
-      `┃ ├ • *${PREFIX}kbbi*`,
-      `┃ ├ • *${PREFIX}wiki*`,
       `┃ ├ • *${PREFIX}cuaca*`,
       `┃ ├ • *${PREFIX}cuacaalert*`,
       `┃ ├ • *${PREFIX}gempa*`,
+      `┃`,
+      `┃  *SEARCH*`,
+      `┃ ├ • *${PREFIX}kbbi*`,
+      `┃ ├ • *${PREFIX}wiki*`,
+      `┃ ├ • *${PREFIX}lirik*`,
+      `┃ ├ • *${PREFIX}pinterest*`,
+      `┃ ├ • *${PREFIX}yaho*`,
+      `┃ ├ • *${PREFIX}lahelu*`,
       `┃`,
       `┃  *GRUP*`,
       `┃ ├ • *${PREFIX}setwelcome*`,
@@ -163,15 +195,25 @@ async function sendMenuWithImage(sock, jid, sender) {
       `┃ ├ • *${PREFIX}sholat*`,
       `┃ ├ • *${PREFIX}quran*`,
       `┃`,
-      `┃ 🛠️ *TOOLS*`,
+      `┃  *TOOLS*`,
       `┃ ├ • *${PREFIX}sticker*`,
       `┃ ├ • *${PREFIX}removebg*`,
-      `┃ ├ • *${PREFIX}tr*`,
       `┃ ├ • *${PREFIX}tts*`,
-      `┃ ├ • *${PREFIX}ai*`,
       `┃ ├ • *${PREFIX}kalkulator*`,
       `┃`,
-      `┃ 📥 *DOWNLOADER*`,
+      `┃  *AI*`,
+      `┃ ├ • *${PREFIX}tr*`,
+      `┃ ├ • *${PREFIX}summarize*`,
+      `┃ ├ • *${PREFIX}paraphrase*`,
+      `┃ ├ • *${PREFIX}expand*`,
+      `┃ ├ • *${PREFIX}grammar*`,
+      `┃ ├ • *${PREFIX}dracintts*`,
+      `┃ ├ • *${PREFIX}geminiai*`,
+      `┃ ├ • *${PREFIX}gptai*`,
+      `┃ ├ • *${PREFIX}deepseekai*`,
+      `┃ ├ • *${PREFIX}quillbot*`,
+      `┃`,
+      `┃  *DOWNLOADER*`,
       `┃ ├ • *${PREFIX}tiktok*`,
       `┃ ├ • *${PREFIX}ig*`,
       `┃ ├ • *${PREFIX}ytmp3*`,
@@ -186,20 +228,24 @@ async function sendMenuWithImage(sock, jid, sender) {
       `┃ ├ • *${PREFIX}runtime*`,
       `┃ ├ • *${PREFIX}status*`,
       `┃`,
+      `┃  *OWNER*`,
+      `┃ ├ • *${PREFIX}whitelist*`,
+      `┃ ├ • *${PREFIX}botmode*`,
+      `┃`,
       `┗━━━━━━━━━━━━━━━━━━━━━━━┛`,
       ``,
       `💡 *Info:* Gunakan perintah *${PREFIX}help <nama_fitur>*`,
       `untuk melihat fungsi dan deskripsi detail.`,
       ``,
       `─────────────────────────`,
-      `✨ _© ${new Date().getFullYear()} ${config.botName} • ${config.ownerName}_ ✨`
+      `✨ _© ${new Date().getFullYear()} ${config.botName} • ${config.ownerName}_ ✨`,
     ].join("\n");
 
     await sock.sendMessage(jid, {
       image: config.botImage,
-      caption: body
+      caption: body,
     });
   }
 }
 
-module.exports = { sendMenuWithImage };
+module.exports = {sendMenuWithImage};

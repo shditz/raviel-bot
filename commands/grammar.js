@@ -1,24 +1,21 @@
 const TRANSLAPP_API = "https://puruboy-api.vercel.app/api/ai/translapp";
 
 module.exports = {
-  name: "tr",
-  aliases: ["translate"],
-  description: "Menerjemahkan teks menggunakan AI. Gunakan: !tr <bahasa_tujuan> <teks>",
+  name: "grammar",
+  aliases: ["tata", "spellcheck"],
+  description: "Perbaiki tata bahasa dan ejaan teks. Gunakan: !grammar <teks>",
   async execute(sock, m, args, {jid}) {
-    if (!args.length || args.length < 2) {
+    const text = args.join(" ");
+
+    if (!text) {
       return await sock.sendMessage(
         jid,
-        {
-          text: "❌ Format salah.\nGunakan: !tr <bahasa_tujuan> <teks>\n\nContoh:\n!tr english Halo dunia\n!tr spanish Apa kabar?",
-        },
+        {text: "❌ Masukkan teks yang ingin diperbaiki!\n\nGunakan: !grammar <teks>"},
         {quoted: m},
       );
     }
 
-    const targetLang = args[0];
-    const text = args.slice(1).join(" ");
-
-    await sock.sendMessage(jid, {text: "🔄 Menerjemahkan..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "✅ Memeriksa tata bahasa..."}, {quoted: m});
 
     try {
       const response = await fetch(TRANSLAPP_API, {
@@ -26,8 +23,7 @@ module.exports = {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           text: text,
-          module: "TRANSLATE",
-          to: targetLang,
+          module: "GRAMMAR",
         }),
       });
 
@@ -40,7 +36,7 @@ module.exports = {
       if (!data.success || !data.result?.output) {
         return await sock.sendMessage(
           jid,
-          {text: "❌ Gagal menerjemahkan teks. Cek bahasa tujuan dan coba lagi!"},
+          {text: "❌ Gagal memeriksa tata bahasa. Coba lagi nanti!"},
           {quoted: m},
         );
       }
@@ -48,7 +44,7 @@ module.exports = {
       await sock.sendMessage(
         jid,
         {
-          text: `🌐 *Translate ke ${data.result.to}*\n\n📝 *Input:* ${data.result.input}\n\n✅ *Output:* ${data.result.output}`,
+          text: `🔤 *Perbaikan Tata Bahasa*\n\n📝 *Original:*\n${data.result.input}\n\n✅ *Diperbaiki:*\n${data.result.output}`,
         },
         {quoted: m},
       );

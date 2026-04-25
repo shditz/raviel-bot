@@ -13,27 +13,58 @@ const {
   Browsers,
 } = require("lilys-baileys");
 const config = require("./config");
-const { sendMenuWithImage } = require("./handlers/menu");
-const { getUser, registerUser, isRegistered, getGroup, updateGroup, addWarn, resetWarn, getTotalUsers, getTotalGroups } = require("./database/db");
-const { normalizeJid, isAdmin } = require("./utils/jid");
+const {sendMenuWithImage} = require("./handlers/menu");
+const {
+  getUser,
+  registerUser,
+  isRegistered,
+  getGroup,
+  updateGroup,
+  addWarn,
+  resetWarn,
+  getTotalUsers,
+  getTotalGroups,
+  isGroupWhitelisted,
+  isBotAllowedInDM,
+  flushAllDebouncers,
+} = require("./database/db");
+const {normalizeJid, isAdmin} = require("./utils/jid");
 const canvafy = require("canvafy");
+const {TempFileCleanup} = require("./utils/cleanup");
+const {LRUCache} = require("./utils/cache");
+
+// OPTIMIZATION: Preload images asynchronously (non-blocking)
+config.preloadImages().catch((err) => console.error("Failed to preload images:", err.message));
+
+// OPTIMIZATION: Start temp file cleanup
+const tempCleanup = new TempFileCleanup();
+tempCleanup.start(600000); // Cleanup every 10 minutes
+
+// OPTIMIZATION: Initialize API response cache
+const apiResponseCache = new LRUCache(200, 300000); // 200 entries, 5 min TTL
+
+// OPTIMIZATION: Avatar cache to avoid re-downloading
+const avatarCache = new Map();
+const AVATAR_CACHE_TTL = 3600000; // 1 hour
 
 const commands = new Map();
-const commandFiles = fs.readdirSync(path.join(__dirname, "commands")).filter(f => f.endsWith(".js"));
+const commandFiles = fs
+  .readdirSync(path.join(__dirname, "commands"))
+  .filter((f) => f.endsWith(".js"));
 for (const file of commandFiles) {
   const cmd = require(`./commands/${file}`);
   commands.set(cmd.name, cmd);
 }
 
 const AUTH_DIR = path.join(__dirname, "auth");
-if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, {recursive: true});
 
 // Gunakan logger fatal agar terminal benar-benar bersih dari log internal baileys yang tidak penting
-const logger = pino({ level: "fatal" });
+const logger = pino({level: "fatal"});
 const PREFIX = config.prefix;
 
 // Inisialisasi in-memory store untuk caching Baileys (mempercepat bot)
-const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store" }) });
+const store = makeInMemoryStore({logger: pino().child({level: "silent", stream: "store"})});
 store.readFromFile("./auth/baileys_store_multi.json");
 setInterval(() => {
   store.writeToFile("./auth/baileys_store_multi.json");
@@ -45,19 +76,25 @@ const _origLog = console.log;
 const _origInfo = console.info;
 const _origDebug = console.debug;
 
+// OPTIMIZATION: Efficient console filter (precompile regex patterns)
+const LOG_FILTERS = [
+  /newsletter/i,
+  /closing open session/i,
+  /closing session/i,
+  /sessionentry/i,
+  /failed to decrypt/i,
+  /bad mac/i,
+  /session error/i,
+  /timed out/i,
+];
+
 const filterLog = (origFunc, args) => {
-  const s = String(args.join(" ")).toLowerCase();
-  if (
-    s.includes("newsletter") ||
-    s.includes("closing open session") ||
-    s.includes("closing session") ||
-    s.includes("sessionentry") ||
-    s.includes("failed to decrypt") ||
-    s.includes("bad mac") ||
-    s.includes("session error") ||
-    s.includes("timed out")
-  ) {
-    return;
+  const msg = String(args.join(" "));
+  // OPTIMIZATION: Use precompiled regex patterns
+  for (const pattern of LOG_FILTERS) {
+    if (pattern.test(msg)) {
+      return;
+    }
   }
   origFunc.apply(console, args);
 };
@@ -76,7 +113,6 @@ process.on("unhandledRejection", (err) => {
   if (err?.message?.includes("Bad MAC")) return;
   _origError("⚠️ Unhandled Rejection:", err?.message || err);
 });
-
 
 function extractText(msg) {
   if (!msg) return "";
@@ -124,7 +160,7 @@ function extractText(msg) {
 }
 
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  const {state, saveCreds} = await useMultiFileAuthState(AUTH_DIR);
 
   const usePairingCode = !!process.env.PAIRING_NUMBER;
 
@@ -140,7 +176,7 @@ async function connectToWhatsApp() {
     markOnlineOnConnect: false, // Cegah WA memutus koneksi di awal
     generateHighQualityLinkPreview: false, // Hemat RAM dan performa
     getMessage: async () => {
-      return { conversation: "pesan" }; // Mencegah bot crash jika histori pesan tidak sinkron
+      return {conversation: "pesan"}; // Mencegah bot crash jika histori pesan tidak sinkron
     },
   });
 
@@ -149,7 +185,7 @@ async function connectToWhatsApp() {
   // Jika menggunakan Pairing Code dan belum login
   if (usePairingCode && !state.creds.me) {
     const phoneNumber = process.env.PAIRING_NUMBER.replace(/[^0-9]/g, "");
-    
+
     // Tunggu sebentar agar socket siap
     setTimeout(async () => {
       // CEK VITAL: Jika di pertengahan waktu tunggu ternyata bot sudah berhasil login/konek, batalkan request!
@@ -159,7 +195,7 @@ async function connectToWhatsApp() {
       try {
         let code = await sock.requestPairingCode(phoneNumber);
         code = code?.match(/.{1,4}/g)?.join("-") || code;
-        
+
         // Simpan ke file agar mudah dibaca di cPanel
         fs.writeFileSync(path.join(__dirname, "pairing_code.txt"), code);
 
@@ -183,7 +219,7 @@ async function connectToWhatsApp() {
   // Koneksi
   // ============================================================
   sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
+    const {connection, lastDisconnect, qr} = update;
 
     if (qr) {
       console.log("\n📱 Scan QR code di atas dengan WhatsApp kamu!");
@@ -194,16 +230,16 @@ async function connectToWhatsApp() {
       const code = lastDisconnect?.error?.output?.statusCode;
       if (code !== DisconnectReason.loggedOut) {
         console.log(`🔄 Reconnecting... (code: ${code})`);
-        
+
         // Cegah memory leak dari socket lama
         sock.ev.removeAllListeners();
-        
+
         await delay(5000); // Jeda 5 detik agar tidak spam reconnect dan menghindari code 401
         connectToWhatsApp();
       } else {
         console.log("❌ Logged out. Menghapus folder auth dan restart otomatis...");
         if (fs.existsSync(AUTH_DIR)) {
-          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+          fs.rmSync(AUTH_DIR, {recursive: true, force: true});
         }
         process.exit(1); // Keluar agar process manager (seperti PM2 atau nodemon) me-restart ulang dengan bersih
       }
@@ -224,12 +260,16 @@ async function connectToWhatsApp() {
   // ============================================================
   sock.ev.on("group-participants.update", async (update) => {
     try {
-      const { id, participants, action } = update;
+      const {id, participants, action} = update;
       const groupInfo = getGroup(id);
       if (!groupInfo) return;
 
       let metadata;
-      try { metadata = await sock.groupMetadata(id); } catch { return; }
+      try {
+        metadata = await sock.groupMetadata(id);
+      } catch {
+        return;
+      }
       const groupName = metadata.subject;
       const memberCount = metadata.participants.length;
 
@@ -239,38 +279,55 @@ async function connectToWhatsApp() {
         if (!template) continue;
 
         let ppUrl;
-        try { ppUrl = await sock.profilePictureUrl(participant, "image"); }
-        catch { ppUrl = "https://i.ibb.co/1s8T3sY/48f7ce63c7aa.jpg"; }
+        try {
+          ppUrl = await sock.profilePictureUrl(participant, "image");
+        } catch {
+          ppUrl = "https://i.ibb.co/1s8T3sY/48f7ce63c7aa.jpg";
+        }
 
         const caption = template
           .replace(/@user/g, `@${participant.split("@")[0]}`)
           .replace(/@group/g, groupName);
 
+        // OPTIMIZATION: Cache profile pictures to avoid redundant downloads
+        let cachedPP = avatarCache.get(participant);
+        if (cachedPP && cachedPP.expires > Date.now()) {
+          ppUrl = cachedPP.url;
+        } else {
+          avatarCache.set(participant, {
+            url: ppUrl,
+            expires: Date.now() + AVATAR_CACHE_TTL,
+          });
+        }
+
         const image = await new canvafy.WelcomeLeave()
           .setAvatar(ppUrl)
-          .setBackground("image", "https://img.freepik.com/free-photo/abstract-luxury-gradient-blue-background-smooth-dark-blue-with-black-vignette_1258-54470.jpg")
+          .setBackground(
+            "image",
+            "https://img.freepik.com/free-photo/abstract-luxury-gradient-blue-background-smooth-dark-blue-with-black-vignette_1258-54470.jpg",
+          )
           .setTitle(isWelcome ? "Welcome!" : "Goodbye!")
-          .setDescription(isWelcome
-            ? `Selamat bergabung di ${groupName}! 🎉`
-            : `Sampai jumpa lagi! 👋`)
+          .setDescription(
+            isWelcome ? `Selamat bergabung di ${groupName}! 🎉` : `Sampai jumpa lagi! 👋`,
+          )
           .setMember(`Member ke-${memberCount}`)
           .setBorder(isWelcome ? "#00d4ff" : "#ff4757")
           .setAvatarBorder(isWelcome ? "#00d4ff" : "#ff4757")
           .setOverlayOpacity(0.3)
           .build();
 
-        await sock.sendMessage(id, { image, caption, mentions: [participant] });
+        await sock.sendMessage(id, {image, caption, mentions: [participant]});
       }
     } catch (err) {
       console.error("Gagal mengirim welcome/leave:", err);
     }
   });
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
+  sock.ev.on("messages.upsert", async ({messages}) => {
     try {
       if (!messages?.length) return;
       const m = messages[0];
-      
+
       const jid = m.key.remoteJid;
       if (jid === "status@broadcast") return;
 
@@ -283,13 +340,28 @@ async function connectToWhatsApp() {
       const botId = normalizeJid(sock.user.id);
       let sender = m.key.fromMe ? botId : normalizeJid(m.key.participant || m.key.remoteJid);
 
+      // === CEK WHITELIST GRUP ===
+      if (isGroup && !isGroupWhitelisted(jid)) {
+        // Grup tidak di-whitelist, abaikan pesan sepenuhnya
+        return;
+      }
+
+      // === CEK BOT MODE (DM vs GROUP) ===
+      if (!isGroup && !isBotAllowedInDM()) {
+        // DM tidak diizinkan, abaikan pesan sepenuhnya
+        return;
+      }
+
       if (isGroup && text.match(/(chat\.whatsapp\.com\/)/gi)) {
         const groupInfo = getGroup(jid) || {};
         if (groupInfo.antiLink) {
           const gm = await sock.groupMetadata(jid);
           if (!isAdmin(gm, sender) && isAdmin(gm, botId)) {
-            await sock.sendMessage(jid, { delete: m.key });
-            await sock.sendMessage(jid, { text: `⚠️ Link terdeteksi! @${sender.split("@")[0]} dikeluarkan.`, mentions: [sender] });
+            await sock.sendMessage(jid, {delete: m.key});
+            await sock.sendMessage(jid, {
+              text: `⚠️ Link terdeteksi! @${sender.split("@")[0]} dikeluarkan.`,
+              mentions: [sender],
+            });
             await sock.groupParticipantsUpdate(jid, [sender], "remove");
             return;
           }
@@ -303,39 +375,68 @@ async function connectToWhatsApp() {
       const args = rawCmd.split(/\s+/);
       const cmd = args.shift().toLowerCase();
 
-
       console.log(`📩 [${isGroup ? "GRUP" : "DM"}] ${text}`);
 
       // === Cek registrasi (kecuali command daftar) ===
       if (cmd !== "daftar" && cmd !== "register") {
         if (!isRegistered(sender)) {
-          await sock.sendMessage(jid, {
-            text:
-              `⚠️ *Kamu belum terdaftar!*\n\n` +
-              `Silakan daftar terlebih dahulu:\n` +
-              `┌─────────────────\n` +
-              `│ Format: *${PREFIX}daftar nama#umur*\n` +
-              `│ Contoh: *${PREFIX}daftar Budi#17*\n` +
-              `└─────────────────`,
-          }, { quoted: m });
+          await sock.sendMessage(
+            jid,
+            {
+              text:
+                `⚠️ *Kamu belum terdaftar!*\n\n` +
+                `Silakan daftar terlebih dahulu:\n` +
+                `┌─────────────────\n` +
+                `│ Format: *${PREFIX}daftar nama#umur*\n` +
+                `│ Contoh: *${PREFIX}daftar Budi#17*\n` +
+                `└─────────────────`,
+            },
+            {quoted: m},
+          );
           return;
         }
       }
 
       // === Proses command ===
-      const command = commands.get(cmd) || Array.from(commands.values()).find(c => c.aliases?.includes(cmd));
-      
+      const command =
+        commands.get(cmd) || Array.from(commands.values()).find((c) => c.aliases?.includes(cmd));
+
       if (command) {
         try {
-          await command.execute(sock, m, args, { jid, sender, isGroup, botId, PREFIX, config, getUser, registerUser, isRegistered, getGroup, updateGroup, addWarn, resetWarn, getTotalUsers, getTotalGroups, commands });
+          await command.execute(sock, m, args, {
+            jid,
+            sender,
+            isGroup,
+            botId,
+            PREFIX,
+            config,
+            getUser,
+            registerUser,
+            isRegistered,
+            getGroup,
+            updateGroup,
+            addWarn,
+            resetWarn,
+            getTotalUsers,
+            getTotalGroups,
+            commands,
+          });
         } catch (err) {
           console.error(`Error pada command ${cmd}:`, err);
-          await sock.sendMessage(jid, { text: `❌ Terjadi kesalahan saat menjalankan perintah.` }, { quoted: m });
+          await sock.sendMessage(
+            jid,
+            {text: `❌ Terjadi kesalahan saat menjalankan perintah.`},
+            {quoted: m},
+          );
         }
       } else {
-        await sock.sendMessage(jid, {
-          text: `❓ Command *${PREFIX}${cmd}* tidak ditemukan.\nKetik *${PREFIX}menu* untuk melihat daftar perintah.`
-        }, { quoted: m });
+        await sock.sendMessage(
+          jid,
+          {
+            text: `❓ Command *${PREFIX}${cmd}* tidak ditemukan.\nKetik *${PREFIX}menu* untuk melihat daftar perintah.`,
+          },
+          {quoted: m},
+        );
       }
     } catch (err) {
       if (!err.message?.includes("Bad MAC") && !err.message?.includes("decrypt")) {
@@ -350,4 +451,19 @@ async function connectToWhatsApp() {
 connectToWhatsApp().catch((err) => {
   _origError("Connection error:", err);
   process.exit(1);
+});
+
+// OPTIMIZATION: Graceful shutdown - flush pending database saves
+process.on("SIGINT", async () => {
+  console.log("\n⏹️ Shutting down gracefully...");
+  flushAllDebouncers();
+  tempCleanup.stop();
+  setTimeout(() => process.exit(0), 1000);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("\n⏹️ Shutting down gracefully...");
+  flushAllDebouncers();
+  tempCleanup.stop();
+  setTimeout(() => process.exit(0), 1000);
 });

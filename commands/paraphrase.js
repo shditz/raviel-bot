@@ -1,24 +1,21 @@
 const TRANSLAPP_API = "https://puruboy-api.vercel.app/api/ai/translapp";
 
 module.exports = {
-  name: "tr",
-  aliases: ["translate"],
-  description: "Menerjemahkan teks menggunakan AI. Gunakan: !tr <bahasa_tujuan> <teks>",
+  name: "paraphrase",
+  aliases: ["parafrasa", "ulang"],
+  description: "Tulis ulang teks dengan kata-kata yang berbeda. Gunakan: !paraphrase <teks>",
   async execute(sock, m, args, {jid}) {
-    if (!args.length || args.length < 2) {
+    const text = args.join(" ");
+
+    if (!text) {
       return await sock.sendMessage(
         jid,
-        {
-          text: "❌ Format salah.\nGunakan: !tr <bahasa_tujuan> <teks>\n\nContoh:\n!tr english Halo dunia\n!tr spanish Apa kabar?",
-        },
+        {text: "❌ Masukkan teks yang ingin diparafrase!\n\nGunakan: !paraphrase <teks>"},
         {quoted: m},
       );
     }
 
-    const targetLang = args[0];
-    const text = args.slice(1).join(" ");
-
-    await sock.sendMessage(jid, {text: "🔄 Menerjemahkan..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "✏️ Menulis ulang teks..."}, {quoted: m});
 
     try {
       const response = await fetch(TRANSLAPP_API, {
@@ -26,8 +23,7 @@ module.exports = {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           text: text,
-          module: "TRANSLATE",
-          to: targetLang,
+          module: "PARAPHRASE",
         }),
       });
 
@@ -40,7 +36,7 @@ module.exports = {
       if (!data.success || !data.result?.output) {
         return await sock.sendMessage(
           jid,
-          {text: "❌ Gagal menerjemahkan teks. Cek bahasa tujuan dan coba lagi!"},
+          {text: "❌ Gagal menulis ulang teks. Coba lagi nanti!"},
           {quoted: m},
         );
       }
@@ -48,7 +44,7 @@ module.exports = {
       await sock.sendMessage(
         jid,
         {
-          text: `🌐 *Translate ke ${data.result.to}*\n\n📝 *Input:* ${data.result.input}\n\n✅ *Output:* ${data.result.output}`,
+          text: `✍️ *Parafrase Teks*\n\n📝 *Original:*\n${data.result.input}\n\n✅ *Hasil:*\n${data.result.output}`,
         },
         {quoted: m},
       );
