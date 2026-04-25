@@ -2,9 +2,6 @@ require("dotenv").config();
 const path = require("path");
 const fs = require("fs").promises;
 
-// ⚠️ IMPORTANT: Images are now loaded asynchronously to prevent startup blocking
-// They will be cached after first load
-
 let imageCache = {
   botImage: null,
   ownerImage: null,
@@ -17,10 +14,6 @@ let imageCache = {
 let isLoadingImages = false;
 let imagesLoaded = false;
 
-/**
- * Async function to preload all images into cache
- * Called during bot startup to avoid blocking
- */
 async function preloadImages() {
   if (imagesLoaded || isLoadingImages) return;
 
@@ -52,17 +45,12 @@ async function preloadImages() {
   }
 }
 
-/**
- * Get cached image (with fallback to sync load if not preloaded)
- * This is a safety measure - normally images should be preloaded
- */
 function getImage(imageName) {
   const image = imageCache[imageName];
   if (image) {
     return image;
   }
 
-  // Fallback: sync load (should not happen if preload worked)
   console.warn(`⚠️ Image ${imageName} not preloaded, loading synchronously`);
   try {
     const imagePath = path.join(__dirname, "assets", "image");

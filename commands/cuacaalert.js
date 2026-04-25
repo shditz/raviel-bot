@@ -1,17 +1,16 @@
 module.exports = {
   name: "cuacaalert",
   aliases: ["alertcuaca", "peringatancuaca"],
-  description: "Menampilkan peringatan dini cuaca aktif dari BMKG.",
+  description: "Menampilkan informasi peringatan dini cuaca aktif yang dikeluarkan oleh BMKG.",
   async execute(sock, m, args, { jid }) {
     try {
       const res = await fetch("https://www.bmkg.go.id/alerts/nowcast/id/rss.xml");
       if (!res.ok) {
-        return await sock.sendMessage(jid, { text: "❌ Gagal menghubungi server BMKG." }, { quoted: m });
+        return await sock.sendMessage(jid, { text: "❌ *KESALAHAN KONEKSI*\n\nGagal menghubungi server BMKG." }, { quoted: m });
       }
 
       const xmlText = await res.text();
 
-      // Parse RSS items dari XML secara manual (tanpa dependency tambahan)
       const items = [];
       const itemRegex = /<item>([\s\S]*?)<\/item>/g;
       let match;
@@ -34,29 +33,33 @@ module.exports = {
       }
 
       if (items.length === 0) {
-        return await sock.sendMessage(jid, { text: "✅ Tidak ada peringatan dini cuaca yang aktif saat ini." }, { quoted: m });
+        return await sock.sendMessage(jid, { text: "✅ *CUACA AMAN*\n\nTidak ada peringatan dini cuaca yang aktif untuk wilayah Indonesia saat ini." }, { quoted: m });
       }
 
       let body = `⚠️ *PERINGATAN DINI CUACA BMKG*\n\n`;
 
       items.forEach((item, i) => {
         body +=
-          `╭─── 🔴 *Peringatan ${i + 1}* ───\n` +
-          `│ 📌 *${item.title}*\n` +
-          `│ 📅 ${item.pubDate}\n` +
-          `│ 👤 ${item.author}\n` +
-          `│\n` +
-          `│ ${item.description}\n` +
-          `╰──────────────────\n\n`;
+          `╭━━━━━━━ 🔴 *ALERT ${i + 1}* ━━━━━━━╮\n` +
+          `┃\n` +
+          `┃ 📌 *Judul:* \n┃ ${item.title}\n` +
+          `┃\n` +
+          `┃ 📅 *Waktu:* ${item.pubDate}\n` +
+          `┃ 👤 *Sumber:* ${item.author}\n` +
+          `┃\n` +
+          `┃ 📝 *Keterangan:* \n` +
+          `┃ ${item.description.split("\n").join("\n┃ ")}\n` +
+          `┃\n` +
+          `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
       });
 
-      body += `_Sumber: BMKG - Badan Meteorologi, Klimatologi, dan Geofisika_`;
+      body += `_Sumber: BMKG Indonesia (Badan Meteorologi, Klimatologi, dan Geofisika)_`;
 
       await sock.sendMessage(jid, { text: body }, { quoted: m });
 
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, { text: "❌ Gagal mengambil data peringatan cuaca dari BMKG." }, { quoted: m });
+      await sock.sendMessage(jid, { text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat mengambil data peringatan cuaca. Silakan coba kembali nanti." }, { quoted: m });
     }
   }
 };

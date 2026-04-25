@@ -1,7 +1,4 @@
-/**
- * Temporary File Cleanup Utility
- * Automatically cleans up old temporary files to prevent disk bloat
- */
+
 
 const fs = require("fs");
 const path = require("path");
@@ -9,15 +6,12 @@ const path = require("path");
 class TempFileCleanup {
   constructor(tmpDir = null, maxAgeMs = 3600000) {
     this.tmpDir = tmpDir || path.join(__dirname, "..", "tmp");
-    this.maxAgeMs = maxAgeMs; // Default: 1 hour
+    this.maxAgeMs = maxAgeMs; 
     this.checkInterval = null;
   }
 
-  /**
-   * Start automatic cleanup (runs periodically)
-   */
+
   start(intervalMs = 600000) {
-    // Default: cleanup every 10 minutes
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
@@ -31,9 +25,7 @@ class TempFileCleanup {
     console.log(`✅ Temp cleanup started (interval: ${intervalMs}ms)`);
   }
 
-  /**
-   * Stop automatic cleanup
-   */
+
   stop() {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
@@ -42,9 +34,7 @@ class TempFileCleanup {
     }
   }
 
-  /**
-   * Run cleanup once
-   */
+
   async cleanup() {
     try {
       if (!fs.existsSync(this.tmpDir)) {
@@ -62,7 +52,6 @@ class TempFileCleanup {
           const stats = fs.statSync(filePath);
           const age = now - stats.mtimeMs;
 
-          // Delete if older than maxAge
           if (age > this.maxAgeMs) {
             fs.unlinkSync(filePath);
             deleted++;
@@ -84,9 +73,6 @@ class TempFileCleanup {
     }
   }
 
-  /**
-   * Force delete all temp files
-   */
   async clearAll() {
     try {
       if (!fs.existsSync(this.tmpDir)) {
@@ -114,9 +100,7 @@ class TempFileCleanup {
     }
   }
 
-  /**
-   * Get temp directory size (in MB)
-   */
+
   getSize() {
     try {
       if (!fs.existsSync(this.tmpDir)) {
@@ -132,7 +116,7 @@ class TempFileCleanup {
         totalSize += stats.size;
       }
 
-      return (totalSize / 1024 / 1024).toFixed(2); // Return in MB
+      return (totalSize / 1024 / 1024).toFixed(2); 
     } catch (err) {
       console.error("Failed to get size:", err.message);
       return 0;

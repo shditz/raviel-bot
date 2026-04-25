@@ -10,14 +10,13 @@ const {
 
 module.exports = {
   name: "whitelist",
-  description: "Mengatur grup mana saja yang boleh menggunakan bot (hanya owner).",
+  description: "Mengatur izin penggunaan bot hanya untuk grup-grup tertentu yang disetujui oleh Owner.",
   aliases: ["wl"],
   async execute(sock, m, args, {jid, sender, isGroup, botId}) {
-    // Cek apakah pengguna adalah owner
     if (sender !== `${config.ownerNumber}@s.whatsapp.net`) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Hanya owner yang bisa menggunakan command ini!"},
+        {text: "❌ *AKSES DITOLAK*\n\nPerintah ini bersifat rahasia dan hanya dapat diakses oleh Pemilik Bot (Owner)!"},
         {quoted: m},
       );
     }
@@ -31,9 +30,9 @@ module.exports = {
           jid,
           {
             text:
-              "✅ *Whitelist diaktifkan!*\n\n" +
-              "Bot sekarang hanya akan merespons di grup yang telah di-whitelist.\n\n" +
-              "_Gunakan `!whitelist add` untuk menambahkan grup._",
+              "✅ *WHITELIST DIAKTIFKAN*\n\n" +
+              "Sistem keamanan sekarang aktif. Bot hanya akan merespons pada grup yang telah terdaftar dalam daftar putih.\n\n" +
+              "💡 _Gunakan `!whitelist add` untuk mendaftarkan grup._",
           },
           {quoted: m},
         );
@@ -45,7 +44,8 @@ module.exports = {
           jid,
           {
             text:
-              "✅ *Whitelist dinonaktifkan!*\n\n" + "Bot sekarang akan merespons di semua grup.",
+              "✅ *WHITELIST DINONAKTIFKAN*\n\n" + 
+              "Sistem keamanan telah dimatikan. Bot sekarang akan merespons di semua grup tanpa terkecuali.",
           },
           {quoted: m},
         );
@@ -57,9 +57,9 @@ module.exports = {
             jid,
             {
               text:
-                "❌ *Gunakan command ini di grup!*\n\n" +
-                "Atau kirim grup ID-nya.\n\n" +
-                "Format: `!whitelist add <grup_id>`",
+                "❌ *KHUSUS GRUP*\n\n" +
+                "Silakan jalankan perintah ini di dalam grup yang ingin Anda daftarkan!\n\n" +
+                "*Format:* `!whitelist add`",
             },
             {quoted: m},
           );
@@ -75,11 +75,11 @@ module.exports = {
           jid,
           {
             text:
-              `✅ *Grup berhasil ditambahkan ke whitelist!*\n\n` +
-              `📍 Nama Grup: *${groupName}*\n` +
-              `🔗 Grup ID: *${targetGroup}*\n\n` +
-              `📊 Total grup whitelisted: *${whitelistData.groups.length}*\n` +
-              `Status: ${whitelistData.enabled ? "🟢 Aktif" : "🔴 Nonaktif"}`,
+              `✅ *GRUP BERHASIL DIDAFTARKAN*\n\n` +
+              `🏢 *Nama Grup:* ${groupName}\n` +
+              `🆔 *Grup ID:* ${targetGroup}\n\n` +
+              `📊 *Total Terdaftar:* ${whitelistData.groups.length} Grup\n` +
+              `🛡️ *Status:* ${whitelistData.enabled ? "🟢 Aktif" : "🔴 Nonaktif"}`,
           },
           {quoted: m},
         );
@@ -91,9 +91,9 @@ module.exports = {
             jid,
             {
               text:
-                "❌ *Gunakan command ini di grup!*\n\n" +
-                "Atau kirim grup ID-nya.\n\n" +
-                "Format: `!whitelist remove <grup_id>`",
+                "❌ *KHUSUS GRUP*\n\n" +
+                "Silakan jalankan perintah ini di dalam grup yang ingin Anda hapus aksesnya!\n\n" +
+                "*Format:* `!whitelist remove`",
             },
             {quoted: m},
           );
@@ -109,11 +109,11 @@ module.exports = {
           jid,
           {
             text:
-              `✅ *Grup berhasil dihapus dari whitelist!*\n\n` +
-              `📍 Nama Grup: *${groupName}*\n` +
-              `🔗 Grup ID: *${targetGroup}*\n\n` +
-              `📊 Total grup whitelisted: *${whitelistData.groups.length}*\n` +
-              `Status: ${whitelistData.enabled ? "🟢 Aktif" : "🔴 Nonaktif"}`,
+              `✅ *GRUP BERHASIL DIHAPUS*\n\n` +
+              `🏢 *Nama Grup:* ${groupName}\n` +
+              `🆔 *Grup ID:* ${targetGroup}\n\n` +
+              `📊 *Total Terdaftar:* ${whitelistData.groups.length} Grup\n` +
+              `🛡️ *Status:* ${whitelistData.enabled ? "🟢 Aktif" : "🔴 Nonaktif"}`,
           },
           {quoted: m},
         );
@@ -130,12 +130,12 @@ module.exports = {
               text:
                 `╭━━━ 📋 *DAFTAR WHITELIST* ━━━╮\n` +
                 `┃\n` +
-                `┃ Status: ${statusText}\n` +
+                `┃ 🛡️ *Status:* ${statusText}\n` +
                 `┃\n` +
-                `┃ ❌ Belum ada grup yang di-whitelist.\n` +
+                `┃ ❌ Belum ada grup terdaftar.\n` +
                 `┃\n` +
-                `┃ Gunakan \`!whitelist add\` di grup\n` +
-                `┃ yang ingin ditambahkan.\n` +
+                `┃ _Gunakan !whitelist add di grup_\n` +
+                `┃ _untuk mendaftarkan akses._\n` +
                 `┃\n` +
                 `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
             },
@@ -146,8 +146,8 @@ module.exports = {
         let listText =
           `╭━━━ 📋 *DAFTAR WHITELIST* ━━━╮\n` +
           `┃\n` +
-          `┃ Status: ${statusText}\n` +
-          `┃ Total: *${whitelistData.groups.length}* grup\n` +
+          `┃ 🛡️ *Status:* ${statusText}\n` +
+          `┃ 📊 *Total:* ${whitelistData.groups.length} Grup\n` +
           `┃\n`;
 
         for (let i = 0; i < whitelistData.groups.length; i++) {
@@ -157,7 +157,7 @@ module.exports = {
             listText += `┃ ${i + 1}. *${metadata.subject}*\n`;
             listText += `┃    ID: ${groupId}\n`;
           } catch (err) {
-            listText += `┃ ${i + 1}. *(Grup tidak ditemukan)*\n`;
+            listText += `┃ ${i + 1}. *(Grup Tidak Ditemukan)*\n`;
           }
         }
 
@@ -166,19 +166,18 @@ module.exports = {
         return await sock.sendMessage(jid, {text: listText}, {quoted: m});
       }
 
-      // Jika subcommand tidak dikenal
       return await sock.sendMessage(
         jid,
         {
           text:
-            `❓ *Subcommand tidak dikenal!*\n\n` +
-            `Penggunaan:\n` +
+            `❓ *SUB-COMMAND TIDAK VALID*\n\n` +
+            `Gunakan salah satu opsi berikut:\n` +
             `┌─────────────────────────\n` +
-            `│ \`!whitelist enable\` - Aktifkan whitelist\n` +
-            `│ \`!whitelist disable\` - Nonaktifkan whitelist\n` +
-            `│ \`!whitelist add\` - Tambah grup saat ini\n` +
-            `│ \`!whitelist remove\` - Hapus grup saat ini\n` +
-            `│ \`!whitelist list\` - Lihat daftar grup\n` +
+            `│ • \`!whitelist enable\`\n` +
+            `│ • \`!whitelist disable\`\n` +
+            `│ • \`!whitelist add\`\n` +
+            `│ • \`!whitelist remove\`\n` +
+            `│ • \`!whitelist list\`\n` +
             `└─────────────────────────`,
         },
         {quoted: m},
@@ -187,7 +186,7 @@ module.exports = {
       console.error("Error pada command whitelist:", err);
       return await sock.sendMessage(
         jid,
-        {text: `❌ Terjadi kesalahan: ${err.message}`},
+        {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat memproses perintah whitelist. Silakan coba kembali nanti."},
         {quoted: m},
       );
     }

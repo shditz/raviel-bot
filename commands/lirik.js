@@ -1,13 +1,13 @@
 module.exports = {
   name: "lirik",
   aliases: ["lyrics"],
-  description: "Mencari lirik lagu. Gunakan: !lirik <nama_artis> <nama_lagu>",
+  description: "Mencari lirik lagu dari berbagai artis dan judul secara akurat.",
   async execute(sock, m, args, {jid}) {
     const query = args.join(" ").trim();
     if (!query) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Masukkan nama artis dan lagu! Contoh: !lirik Alan Walker Faded"},
+        {text: "❌ *MASUKKAN JUDUL*\n\nSilakan masukkan nama artis dan judul lagu!\n*Contoh:* !lirik Alan Walker Faded"},
         {quoted: m},
       );
     }
@@ -20,32 +20,33 @@ module.exports = {
       if (!data.success || !data.result || data.result.length === 0) {
         return await sock.sendMessage(
           jid,
-          {text: `❌ Lirik untuk *${query}* tidak ditemukan.`},
+          {text: `❌ *TIDAK DITEMUKAN*\n\nLirik untuk lagu *${query}* tidak dapat ditemukan di pangkalan data kami.`},
           {quoted: m},
         );
       }
 
       const lyric = data.result[0];
-      let body = `🎵 *PENCARIAN LIRIK*\n\n`;
+      let body = `🎵 *HASIL PENCARIAN LIRIK*\n\n`;
       body += `🎤 *Artis:* ${lyric.artist}\n`;
-      body += `🎵 *Lagu:* ${lyric.track}\n`;
-      body += `💿 *Album:* ${lyric.album}\n`;
-      body += `⏱️ *Durasi:* ${Math.floor(lyric.duration / 60)}:${String(lyric.duration % 60).padStart(2, "0")}\n\n`;
+      body += `🎶 *Judul:* ${lyric.track}\n`;
+      body += `💿 *Album:* ${lyric.album || "-"}\n`;
+      body += `────────────────────\n\n`;
 
       if (lyric.plainLyrics) {
-        const lyrics = lyric.plainLyrics.substring(0, 1000);
-        body += `📝 *Lirik:*\n${lyrics}...\n\n`;
-        body += `_Tap untuk lirik lengkap dengan waktu sinkronisasi_`;
+        body += `📝 *Lirik:*\n\n${lyric.plainLyrics}\n\n`;
       } else {
-        body += `❌ Lirik tidak tersedia untuk lagu ini.`;
+        body += `❌ *INFORMASI*\n\nLirik teks tidak tersedia untuk lagu ini di pangkalan data.`;
       }
+
+      body += `────────────────────\n`;
+      body += `_© ${lyric.artist} - ${lyric.track}_`;
 
       await sock.sendMessage(jid, {text: body}, {quoted: m});
     } catch (error) {
       console.error("Error in lirik command:", error);
       return await sock.sendMessage(
         jid,
-        {text: "❌ Terjadi kesalahan saat mencari lirik. Coba lagi nanti."},
+        {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat mencoba mengambil data lirik. Silakan coba kembali nanti."},
         {quoted: m},
       );
     }

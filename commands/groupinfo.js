@@ -1,9 +1,9 @@
 module.exports = {
   name: "groupinfo",
-  description: "Menampilkan informasi lengkap tentang grup ini.",
+  description: "Menampilkan statistik dan informasi detail mengenai grup ini.",
   async execute(sock, m, args, { jid }) {
     if (!jid.endsWith("@g.us")) {
-      return await sock.sendMessage(jid, { text: "❌ Perintah ini hanya bisa digunakan di dalam grup!" }, { quoted: m });
+      return await sock.sendMessage(jid, { text: "❌ *AKSES DITOLAK*\n\nPerintah ini hanya dapat digunakan di dalam grup!" }, { quoted: m });
     }
 
     try {
@@ -14,18 +14,19 @@ module.exports = {
       const creationDate = new Date(metadata.creation * 1000).toLocaleString("id-ID");
 
       const body = 
-        `╭━━━━ 🏢 *Group Info* ━━━━╮\n` +
+        `╭━━━━━━━ 🏢 *GROUP INFO* ━━━━━━━╮\n` +
         `┃\n` +
-        `┃ 📛 *Nama Grup*  : ${metadata.subject}\n` +
-        `┃ 🆔 *ID Grup*    : ${metadata.id}\n` +
-        `┃ 👑 *Pemilik*    : @${owner.split("@")[0]}\n` +
-        `┃ 📅 *Dibuat*     : ${creationDate}\n` +
-        `┃ 👥 *Anggota*    : ${participants.length} orang\n` +
-        `┃ 👮 *Admin*      : ${admins.length} orang\n` +
-        `┃ 📝 *Deskripsi*  : \n` +
-        `${metadata.desc || "Tidak ada deskripsi."}\n` +
+        `┃ 📛 *Nama Grup:* \n┃ ${metadata.subject}\n` +
         `┃\n` +
-        `╰━━━━━━━━━━━━━━━━━━━━╯`;
+        `┃ 👑 *Pemilik:* @${owner.split("@")[0]}\n` +
+        `┃ 📅 *Dibuat:* ${creationDate}\n` +
+        `┃ 👥 *Total Anggota:* ${participants.length}\n` +
+        `┃ 👮 *Total Admin:* ${admins.length}\n` +
+        `┃\n` +
+        `┃ 📝 *Deskripsi:* \n` +
+        `┃ ${metadata.desc ? metadata.desc.split("\n").join("\n┃ ") : "Tidak ada deskripsi."}\n` +
+        `┃\n` +
+        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
       await sock.sendMessage(jid, { 
         text: body,
@@ -34,7 +35,7 @@ module.exports = {
 
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, { text: "❌ Gagal mengambil informasi grup." }, { quoted: m });
+      await sock.sendMessage(jid, { text: "❌ *GAGAL*\n\nMaaf, sistem gagal memuat informasi metadata grup saat ini." }, { quoted: m });
     }
   }
 };

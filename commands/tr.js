@@ -3,13 +3,13 @@ const TRANSLAPP_API = "https://puruboy-api.vercel.app/api/ai/translapp";
 module.exports = {
   name: "tr",
   aliases: ["translate"],
-  description: "Menerjemahkan teks menggunakan AI. Gunakan: !tr <bahasa_tujuan> <teks>",
+  description: "Menerjemahkan teks antar bahasa secara otomatis menggunakan teknologi AI.",
   async execute(sock, m, args, {jid}) {
     if (!args.length || args.length < 2) {
       return await sock.sendMessage(
         jid,
         {
-          text: "❌ Format salah.\nGunakan: !tr <bahasa_tujuan> <teks>\n\nContoh:\n!tr english Halo dunia\n!tr spanish Apa kabar?",
+          text: `❌ *FORMAT SALAH*\n\nGunakan format: *!tr <bahasa_tujuan> <teks>*\n\n*Contoh:* \n!tr english Halo apa kabar?\n!tr jepang Selamat pagi`,
         },
         {quoted: m},
       );
@@ -18,7 +18,7 @@ module.exports = {
     const targetLang = args[0];
     const text = args.slice(1).join(" ");
 
-    await sock.sendMessage(jid, {text: "🔄 Menerjemahkan..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "⏳ *MENERJEMAHKAN...*\n\nSedang memproses teks Anda, mohon tunggu sebentar."}, {quoted: m});
 
     try {
       const response = await fetch(TRANSLAPP_API, {
@@ -32,7 +32,7 @@ module.exports = {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`Koneksi API Gagal (${response.status})`);
       }
 
       const data = await response.json();
@@ -40,7 +40,7 @@ module.exports = {
       if (!data.success || !data.result?.output) {
         return await sock.sendMessage(
           jid,
-          {text: "❌ Gagal menerjemahkan teks. Cek bahasa tujuan dan coba lagi!"},
+          {text: "❌ *GAGAL*\n\nSistem tidak dapat menerjemahkan teks tersebut. Pastikan bahasa tujuan ditulis dengan benar."},
           {quoted: m},
         );
       }
@@ -48,13 +48,18 @@ module.exports = {
       await sock.sendMessage(
         jid,
         {
-          text: `🌐 *Translate ke ${data.result.to}*\n\n📝 *Input:* ${data.result.input}\n\n✅ *Output:* ${data.result.output}`,
+          text: `🌐 *TERJEMAHAN AI*\n\n` +
+                `🏳️ *Bahasa:* ${data.result.to.toUpperCase()}\n` +
+                `────────────────────\n` +
+                `📝 *Input:* \n_${data.result.input}_\n\n` +
+                `✅ *Hasil:* \n*${data.result.output}*\n` +
+                `────────────────────`,
         },
         {quoted: m},
       );
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+      await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server penerjemah. Silakan coba kembali nanti."}, {quoted: m});
     }
   },
 };

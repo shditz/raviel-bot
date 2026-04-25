@@ -2,9 +2,9 @@ const googleTTS = require("google-tts-api");
 
 module.exports = {
   name: "tts",
-  description: "Mengubah teks menjadi suara (Voice Note). Gunakan: !tts <kode_bahasa> <teks>",
+  description: "Mengubah teks tulisan menjadi suara (Voice Note).",
   async execute(sock, m, args, { jid }) {
-    let targetLang = "id"; // Default bahasa Indonesia
+    let targetLang = "id";
     let textToSpeak = "";
 
     const quotedMsg = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
@@ -17,7 +17,9 @@ module.exports = {
       textToSpeak = quotedText;
     } else {
       if (args.length < 1) {
-        return await sock.sendMessage(jid, { text: "❌ Format salah. Gunakan: !tts <kode_bahasa> <teks> (contoh: !tts id halo semua)\natau balas teks dengan !tts" }, { quoted: m });
+        return await sock.sendMessage(jid, { 
+            text: `❌ *FORMAT SALAH*\n\nGunakan format: *!tts <kode_bahasa> <teks>*\n*Contoh:* !tts id halo semua\n\n_Atau balas (reply) pesan teks dengan perintah *!tts*._` 
+        }, { quoted: m });
       }
       
       if (isLangCode(args[0])) {
@@ -30,11 +32,11 @@ module.exports = {
     }
 
     if (!textToSpeak) {
-      return await sock.sendMessage(jid, { text: "❌ Masukkan teks yang ingin diubah menjadi suara!" }, { quoted: m });
+      return await sock.sendMessage(jid, { text: "❌ *MASUKKAN TEKS*\n\nSilakan tentukan teks yang ingin Anda ubah menjadi pesan suara!" }, { quoted: m });
     }
 
     if (textToSpeak.length > 200) {
-      return await sock.sendMessage(jid, { text: "❌ Teks terlalu panjang! Maksimal 200 karakter." }, { quoted: m });
+      return await sock.sendMessage(jid, { text: "❌ *TEKS TERLALU PANJANG*\n\nBatas maksimal adalah 200 karakter demi menjaga stabilitas sistem." }, { quoted: m });
     }
 
     try {
@@ -47,12 +49,12 @@ module.exports = {
       await sock.sendMessage(jid, {
         audio: { url: url },
         mimetype: "audio/mp4",
-        ptt: true // Kirim sebagai Voice Note
+        ptt: true
       }, { quoted: m });
 
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, { text: "❌ Gagal membuat suara. Pastikan kode bahasa benar (cth: id, en)." }, { quoted: m });
+      await sock.sendMessage(jid, { text: "❌ *GAGAL MEMPROSES*\n\nTerjadi kesalahan saat membuat suara. Pastikan kode bahasa yang Anda gunakan valid (contoh: id, en, ja)." }, { quoted: m });
     }
   }
 };

@@ -4,23 +4,19 @@ const {LRUCache} = require("../utils/cache");
 const GEMINI_API = "https://puruboy-api.vercel.app/api/ai/gemini-v2";
 const DRACIN_API = "https://puruboy-api.vercel.app/api/ai/dracin";
 
-// Simple cache for Gemini responses (10 minutes TTL)
 const geminiCache = new LRUCache(100, 600000);
 
 module.exports = {
   name: "geminiai",
   aliases: ["gemini", "geminai"],
-  description:
-    "Chat dengan Gemini AI atau gunakan TTS. Gunakan: !geminiai <pertanyaan> atau !geminiai --tts <teks>",
+  description: "Asisten AI pintar untuk menjawab pertanyaan atau mengubah teks menjadi suara.",
   async execute(sock, m, args, {jid}) {
     const commandStr = args.join(" ");
 
-    // Cek apakah menggunakan TTS
     if (commandStr.startsWith("--tts")) {
       return await handleDracinTTS(sock, m, args, jid);
     }
 
-    // Chat dengan Gemini
     return await handleGeminiChat(sock, m, args, jid);
   },
 };
@@ -31,13 +27,12 @@ async function handleGeminiChat(sock, m, args, jid) {
   if (!prompt) {
     return await sock.sendMessage(
       jid,
-      {text: "❌ Mau tanya apa? Contoh: !geminiai Siapa penemu lampu?"},
+      {text: "❌ *BUTUH PERTANYAAN*\n\nSilakan masukkan pertanyaan yang ingin Anda tanyakan kepada Gemini AI.\n*Contoh:* !gemini Siapa penemu lampu?"},
       {quoted: m},
     );
   }
 
   try {
-    // OPTIMIZATION: Check cache first
     const cacheKey = `gemini:${prompt.toLowerCase()}`;
     const cachedResult = geminiCache.get(cacheKey);
     if (cachedResult) {
@@ -45,17 +40,17 @@ async function handleGeminiChat(sock, m, args, jid) {
       return;
     }
 
-    await sock.sendMessage(jid, {text: "🤖 Berpikir..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "🤖 *MENGANALISIS...*\n\nGemini sedang memproses jawaban terbaik untuk Anda, mohon tunggu sebentar."}, {quoted: m});
 
     const response = await fetch(GEMINI_API, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({prompt: prompt}),
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      throw new Error(`Koneksi API Gagal (${response.status})`);
     }
 
     const data = await response.json();
@@ -63,28 +58,24 @@ async function handleGeminiChat(sock, m, args, jid) {
     if (!data.success) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Gagal mendapatkan respons dari Gemini"},
+        {text: "❌ *GAGAL*\n\nMaaf, sistem gagal mendapatkan respons dari Gemini AI saat ini."},
         {quoted: m},
       );
     }
 
-    const answer = data.result?.answer || "Tidak ada respons dari AI";
-
-    // OPTIMIZATION: Cache the result
+    const answer = data.result?.answer || "Tidak ada respons dari AI.";
     geminiCache.set(cacheKey, answer);
 
     await sock.sendMessage(jid, {text: answer}, {quoted: m});
   } catch (err) {
     console.error(err);
-    await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+    await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server AI. Silakan coba kembali nanti."}, {quoted: m});
   }
 }
 
 async function handleDracinTTS(sock, m, args, jid) {
-  // Remove --tts from args
   args.shift();
 
-  // Parse parameters
   let text = "";
   let music = true;
   let speed = 1.0;
@@ -113,19 +104,13 @@ async function handleDracinTTS(sock, m, args, jid) {
     return await sock.sendMessage(
       jid,
       {
-        text: `❌ Format salah!
-
-Gunakan: !geminiai --tts <teks> [--music true/false] [--speed 0.5-2.0] [--volume 0.1-1.0]
-
-Contoh:
-!geminiai --tts Halo, apa kabar?
-!geminiai --tts Halo semua --music false --speed 1.5 --volume 0.5`,
+        text: `❌ *FORMAT TTS SALAH*\n\nGunakan: *!gemini --tts <teks>*\n\n💡 *Opsi Tambahan:*\n• \`--music true/false\`\n• \`--speed 0.5-2.0\`\n• \`--volume 0.1-1.0\``,
       },
       {quoted: m},
     );
   }
 
-  await sock.sendMessage(jid, {text: "🎙️ Membuat suara..."}, {quoted: m});
+  await sock.sendMessage(jid, {text: "🎙️ *MENYIAPKAN SUARA...*\n\nSedang mengonversi teks menjadi audio dengan suara khas Dracin AI."}, {quoted: m});
 
   try {
     const payload = {
@@ -143,18 +128,17 @@ Contoh:
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      throw new Error(`Koneksi API Gagal (${response.status})`);
     }
 
     const data = await response.json();
 
     if (!data.success || !data.result?.audio) {
-      return await sock.sendMessage(jid, {text: "❌ Gagal membuat audio dari Dracin"}, {quoted: m});
+      return await sock.sendMessage(jid, {text: "❌ *GAGAL*\n\nMaaf, sistem gagal membuat audio dari Dracin AI saat ini."}, {quoted: m});
     }
 
     const audioUrl = data.result.audio;
 
-    // Kirim audio
     await sock.sendMessage(
       jid,
       {
@@ -166,6 +150,6 @@ Contoh:
     );
   } catch (err) {
     console.error(err);
-    await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+    await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server audio AI. Silakan coba kembali nanti."}, {quoted: m});
   }
 }

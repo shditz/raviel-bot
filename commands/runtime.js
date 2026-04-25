@@ -2,7 +2,8 @@ const config = require("../config");
 
 module.exports = {
   name: "runtime",
-  description: "Menampilkan waktu aktif bot.",
+  aliases: ["uptime"],
+  description: "Menampilkan durasi waktu bot telah berjalan tanpa henti (uptime).",
   async execute(sock, m, args, { jid }) {
     const uptime = process.uptime();
     const days = Math.floor(uptime / 86400);
@@ -13,7 +14,11 @@ module.exports = {
     const timeString = `${days} Hari, ${hours} Jam, ${minutes} Menit, ${seconds} Detik`;
     await sock.sendMessage(jid, { 
       image: config.runtimeImage,
-      caption: `⏳ *Bot Aktif Selama:*\n${timeString}` 
+      caption: `⏳ *BOT RUNTIME STATUS*\n\n` +
+               `Sistem telah aktif selama:\n` +
+               `*${timeString}*\n\n` +
+               `────────────────────\n` +
+               `_Stabilitas sistem terjaga._` 
     }, { quoted: m });
   }
 };

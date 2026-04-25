@@ -10,10 +10,8 @@ const GROUPS_FILE = path.join(DB_DIR, "groups.json");
 const WHITELIST_FILE = path.join(DB_DIR, "whitelist.json");
 const SETTINGS_FILE = path.join(DB_DIR, "settings.json");
 
-// Inisialisasi Cache dengan TTL 0 (tidak pernah kadaluarsa)
 const dbCache = new NodeCache({stdTTL: 0, checkperiod: 0});
 
-// === Inisialisasi File Database ===
 async function _initializeFiles() {
   try {
     if (!fsSync.existsSync(USERS_FILE)) {
@@ -26,14 +24,12 @@ async function _initializeFiles() {
       await fs.writeFile(WHITELIST_FILE, JSON.stringify({enabled: false, groups: []}), "utf8");
     }
     if (!fsSync.existsSync(SETTINGS_FILE)) {
-      await fs.writeFile(SETTINGS_FILE, JSON.stringify({botMode: "all"}), "utf8");
+      await fs.writeFile(SETTINGS_FILE, JSON.stringify({botMode: "all", maintenance: false, prefix: "!"}), "utf8");
     }
   } catch (err) {
     console.error("Failed to initialize files:", err.message);
   }
 }
-
-// === Fungsi Internal (Load ke Cache) ===
 async function _loadToCache() {
   try {
     const [usersData, groupsData, whitelistData, settingsData] = await Promise.all([
@@ -58,11 +54,10 @@ async function _loadToCache() {
     dbCache.set("users", {});
     dbCache.set("groups", {});
     dbCache.set("whitelist", {enabled: false, groups: []});
-    dbCache.set("settings", {botMode: "all"});
+    dbCache.set("settings", {botMode: "all", maintenance: false, prefix: "!"});
   }
 }
 
-// === Debounced Save Functions (ASYNC) ===
 async function _saveUsersAsync() {
   try {
     const users = dbCache.get("users") || {};
@@ -92,23 +87,20 @@ async function _saveWhitelistAsync() {
 
 async function _saveSettingsAsync() {
   try {
-    const settings = dbCache.get("settings") || {botMode: "all"};
+    const settings = dbCache.get("settings") || {botMode: "all", maintenance: false, prefix: "!"};
     await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
   } catch (err) {
     console.error("Failed to save settings:", err.message);
   }
 }
 
-// === Create Debouncers (CRITICAL FIX: Prevents excessive I/O) ===
 const userSaveDebouncer = new Debouncer(_saveUsersAsync, 500);
 const groupSaveDebouncer = new Debouncer(_saveGroupsAsync, 500);
 const whitelistSaveDebouncer = new Debouncer(_saveWhitelistAsync, 500);
 const settingsSaveDebouncer = new Debouncer(_saveSettingsAsync, 500);
 
-// Initialize database on startup
 _initializeFiles().then(() => _loadToCache());
 
-// === USER API ===
 function getUser(jid) {
   const users = dbCache.get("users") || {};
   return users[jid] || null;
@@ -121,9 +113,8 @@ function registerUser(jid, name, age) {
     age: parseInt(age),
     registeredAt: new Date().toISOString(),
   };
-  dbCache.set("users", users); // Update Cache
+  dbCache.set("users", users); 
 
-  // Use debouncer - batches writes within 500ms window
   userSaveDebouncer.execute();
 
   return users[jid];
@@ -151,7 +142,46 @@ function resetWarn(jid) {
   }
 }
 
-// === GROUP API ===
+function banUser(jid) {
+  const users = dbCache.get("users") || {};
+  if (!users[jid]) {
+    users[jid] = {
+      name: "Banned User",
+      registeredAt: new Date().toISOString(),
+    };
+  }
+  users[jid].isBanned = true;
+  dbCache.set("users", users);
+  userSaveDebouncer.execute();
+}
+
+function unbanUser(jid) {
+  const users = dbCache.get("users") || {};
+  if (users[jid]) {
+    users[jid].isBanned = false;
+    dbCache.set("users", users);
+    userSaveDebouncer.execute();
+  }
+}
+
+function isBanned(jid) {
+  const users = dbCache.get("users") || {};
+  return !!users[jid]?.isBanned || !!users[jid]?.isBlacklist;
+}
+
+function setBlacklist(jid, status = true) {
+  const users = dbCache.get("users") || {};
+  if (!users[jid]) {
+    users[jid] = {
+      name: "Blacklisted",
+      registeredAt: new Date().toISOString(),
+    };
+  }
+  users[jid].isBlacklist = status;
+  dbCache.set("users", users);
+  userSaveDebouncer.execute();
+}
+
 function getGroup(jid) {
   const groups = dbCache.get("groups") || {};
   return groups[jid] || null;
@@ -164,9 +194,7 @@ function updateGroup(jid, data) {
   }
 
   groups[jid] = {...groups[jid], ...data};
-  dbCache.set("groups", groups); // Update Cache
-
-  // Use debouncer - batches writes within 500ms window
+  dbCache.set("groups", groups); 
   groupSaveDebouncer.execute();
   return groups[jid];
 }
@@ -183,21 +211,19 @@ function getTotalGroups() {
 
 function checkRemoveBgLimit(jid) {
   const users = dbCache.get("users") || {};
-  if (!users[jid]) return false; // Harus terdaftar dulu
+  if (!users[jid]) return false; 
 
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const today = new Date().toISOString().split("T")[0]; 
   if (users[jid].lastRemoveBg === today) {
-    return false; // Sudah dipakai hari ini
+    return false; 
   }
 
-  // Update tanggal
   users[jid].lastRemoveBg = today;
   dbCache.set("users", users);
   userSaveDebouncer.execute();
-  return true; // Boleh pakai
+  return true; 
 }
 
-// === WHITELIST API ===
 function isWhitelistEnabled() {
   const whitelist = dbCache.get("whitelist") || {enabled: false, groups: []};
   return whitelist.enabled;
@@ -239,7 +265,7 @@ function removeFromWhitelist(jid) {
 
 function isGroupWhitelisted(jid) {
   const whitelist = dbCache.get("whitelist") || {enabled: false, groups: []};
-  if (!whitelist.enabled) return true; // Jika whitelist disabled, semua grup boleh
+  if (!whitelist.enabled) return true; 
   return whitelist.groups.includes(jid);
 }
 
@@ -248,10 +274,9 @@ function getWhitelistGroups() {
   return whitelist;
 }
 
-// === BOT MODE API ===
 function getBotMode() {
   const settings = dbCache.get("settings") || {botMode: "all"};
-  return settings.botMode; // "all" atau "group"
+  return settings.botMode; 
 }
 
 function setBotMode(mode) {
@@ -269,7 +294,23 @@ function isBotAllowedInDM() {
   return getBotMode() === "all";
 }
 
-// === Export Debouncer Flush Function (for graceful shutdown) ===
+function getSettings() {
+  return dbCache.get("settings") || {botMode: "all", maintenance: false, prefix: "!"};
+}
+
+function updateSettings(data) {
+  const settings = dbCache.get("settings") || {botMode: "all", maintenance: false, prefix: "!"};
+  Object.assign(settings, data);
+  dbCache.set("settings", settings);
+  settingsSaveDebouncer.execute();
+  return settings;
+}
+
+function isMaintenance() {
+  const settings = getSettings();
+  return !!settings.maintenance;
+}
+
 function flushAllDebouncers() {
   userSaveDebouncer.flush();
   groupSaveDebouncer.flush();
@@ -298,5 +339,12 @@ module.exports = {
   getBotMode,
   setBotMode,
   isBotAllowedInDM,
+  getSettings,
+  updateSettings,
+  isMaintenance,
+  banUser,
+  unbanUser,
+  isBanned,
+  setBlacklist,
   flushAllDebouncers,
 };

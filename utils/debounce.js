@@ -1,8 +1,3 @@
-/**
- * Simple Debounce Implementation
- * Delays function execution and batches calls within the delay period
- * Perfect for database writes to avoid excessive I/O
- */
 
 class Debouncer {
   constructor(func, delay = 500) {
@@ -13,12 +8,10 @@ class Debouncer {
   }
 
   execute(...args) {
-    // Clear previous timeout
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
     }
 
-    // Schedule new execution
     this.isPending = true;
     this.timeoutId = setTimeout(() => {
       try {
@@ -50,10 +43,6 @@ class Debouncer {
   }
 }
 
-/**
- * Throttle Implementation
- * Ensures function is called at most once per delay period
- */
 class Throttler {
   constructor(func, delay = 500) {
     this.func = func;

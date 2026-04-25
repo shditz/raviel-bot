@@ -3,19 +3,19 @@ const DEEPSEEKAI_API = "https://puruboy-api.vercel.app/api/ai/notegpt";
 module.exports = {
   name: "deepseekai",
   aliases: ["deepseek"],
-  description: "Chat dengan DeepSeek AI. Gunakan: !deepseekai <pertanyaan>",
+  description: "Chat asisten AI tingkat lanjut menggunakan model DeepSeek R1 untuk penalaran yang lebih kuat.",
   async execute(sock, m, args, {jid}) {
     const prompt = args.join(" ");
 
     if (!prompt) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Mau tanya apa? Contoh: !deepseekai Jelaskan cara kerja quantum computing"},
+        {text: "❌ *BUTUH PERTANYAAN*\n\nSilakan masukkan pertanyaan atau instruksi yang ingin Anda ajukan kepada DeepSeek AI.\n*Contoh:* !deepseek Jelaskan cara kerja quantum computing."},
         {quoted: m},
       );
     }
 
-    await sock.sendMessage(jid, {text: "🤖 Berpikir..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "🤖 *MENGANALISIS...*\n\nDeepSeek AI sedang memproses jawaban dengan penalaran mendalam, mohon tunggu sebentar."}, {quoted: m});
 
     try {
       const response = await fetch(DEEPSEEKAI_API, {
@@ -29,7 +29,7 @@ module.exports = {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`Koneksi API Gagal (${response.status})`);
       }
 
       let fullText = "";
@@ -53,9 +53,7 @@ module.exports = {
                   fullText += data.text;
                 }
               }
-            } catch (e) {
-              // Ignore parse errors
-            }
+            } catch (e) {}
           }
         }
       }
@@ -63,12 +61,11 @@ module.exports = {
       if (!fullText) {
         return await sock.sendMessage(
           jid,
-          {text: "❌ Gagal mendapatkan respons dari DeepSeek AI"},
+          {text: "❌ *GAGAL*\n\nMaaf, sistem gagal mendapatkan respons dari DeepSeek AI saat ini."},
           {quoted: m},
         );
       }
 
-      // Send response in chunks if too long
       if (fullText.length > 2000) {
         const chunks = fullText.match(/[\s\S]{1,2000}/g) || [];
         for (const chunk of chunks) {
@@ -80,7 +77,7 @@ module.exports = {
       }
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+      await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server AI. Silakan coba kembali nanti."}, {quoted: m});
     }
   },
 };

@@ -2,22 +2,23 @@ const {isAdmin} = require("../utils/jid");
 
 module.exports = {
   name: "warn",
-  description: "Memberikan peringatan. 3x warn = kick.",
+  description: "Memberikan peringatan kepada anggota. Akumulasi 3 peringatan akan berujung pengeluaran (kick).",
   async execute(sock, m, args, {jid, sender, isGroup, botId, addWarn, resetWarn}) {
-    if (!isGroup) return await sock.sendMessage(jid, {text: "❌ Hanya grup!"}, {quoted: m});
+    if (!isGroup) return await sock.sendMessage(jid, {text: "❌ *AKSES DITOLAK*\n\nPerintah ini hanya dapat digunakan di dalam grup!"}, {quoted: m});
+    
     const gm = await sock.groupMetadata(jid);
-    if (!isAdmin(gm, sender))
-      return await sock.sendMessage(jid, {text: "❌ Hanya admin!"}, {quoted: m});
-    if (!isAdmin(gm, botId))
-      return await sock.sendMessage(jid, {text: "❌ Bot harus admin!"}, {quoted: m});
+    if (!isAdmin(gm, sender)) return await sock.sendMessage(jid, {text: "❌ *AKSES DIBATASI*\n\nMaaf, hanya Admin yang dapat memberikan peringatan kepada anggota!"}, {quoted: m});
+    if (!isAdmin(gm, botId)) return await sock.sendMessage(jid, {text: "❌ *GAGAL*\n\nBot harus menjadi Admin agar dapat memproses sanksi pengeluaran secara otomatis!"}, {quoted: m});
+    
     const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-    if (!mentioned.length)
-      return await sock.sendMessage(jid, {text: "❌ Tag member yang ingin di-warn!"}, {quoted: m});
+    if (!mentioned.length) return await sock.sendMessage(jid, {text: "❌ *PILIH ANGGOTA*\n\nSilakan tag anggota yang ingin Anda berikan peringatan!"}, {quoted: m});
+    
     const target = mentioned[0];
     const warnCount = addWarn(target);
+    
     if (warnCount >= 3) {
       await sock.sendMessage(jid, {
-        text: `⚠️ @${target.split("@")[0]} mencapai 3/3 warn. Dikeluarkan!`,
+        text: `⚠️ *SANKSI PENGELUARAN*\n\nAnggota @${target.split("@")[0]} telah mencapai batas maksimal peringatan (3/3). Dengan ini sistem mengeluarkan anggota tersebut secara otomatis.`,
         mentions: [target],
       });
       await sock.groupParticipantsUpdate(jid, [target], "remove");
@@ -25,7 +26,10 @@ module.exports = {
     } else {
       await sock.sendMessage(
         jid,
-        {text: `⚠️ Peringatan ${warnCount}/3 untuk @${target.split("@")[0]}`, mentions: [target]},
+        {
+          text: `⚠️ *PERINGATAN PELANGGARAN*\n\nAnggota @${target.split("@")[0]} telah diberikan peringatan.\nAkumulasi Saat Ini: *${warnCount}/3*\n\n_Harap mematuhi peraturan grup agar tidak mencapai batas maksimal (3/3)._`, 
+          mentions: [target]
+        },
         {quoted: m},
       );
     }

@@ -1,3 +1,6 @@
 {
-  "botMode": "all"
+  "botMode": "all",
+  "restarted": false,
+  "restartJid": null,
+  "maintenance": false
 }

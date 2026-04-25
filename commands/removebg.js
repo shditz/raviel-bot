@@ -1,74 +1,83 @@
+const axios = require("axios");
 const { downloadContentFromMessage } = require("lilys-baileys");
-const { checkRemoveBgLimit } = require("../database/db");
-require("dotenv").config();
+const cloudinary = require("cloudinary").v2;
 
-async function removeBg(buffer) {
-  const blob = new Blob([buffer], { type: "image/jpeg" });
-  const formData = new FormData();
-  formData.append("size", "auto");
-  formData.append("image_file", blob);
-
-  const response = await fetch("https://api.remove.bg/v1.0/removebg", {
-    method: "POST",
-    headers: { "X-Api-Key": process.env.REMOVE_BG_KEY || "" },
-    body: formData,
-  });
-
-  if (response.ok) {
-    return await response.arrayBuffer();
-  } else {
-    throw new Error(`${response.status}: ${response.statusText}`);
-  }
-}
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 module.exports = {
   name: "removebg",
-  aliases: ["rbg"],
-  description: "Menghapus background gambar (Limit 1x/hari).",
+  aliases: ["rbg", "nobg"],
+  description: "Menghapus latar belakang (background) gambar secara otomatis.",
   async execute(sock, m, args, { jid }) {
-    if (!process.env.REMOVE_BG_KEY) {
-      return await sock.sendMessage(jid, { text: "❌ Fitur ini belum dikonfigurasi (API Key kosong)." }, { quoted: m });
+    const getMsg = (m) => {
+      if (m.message?.imageMessage) return m.message.imageMessage;
+      if (m.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) return m.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
+      const unwrap = (obj) => obj?.ephemeralMessage?.message || obj?.viewOnceMessage?.message || obj?.viewOnceMessageV2?.message || null;
+      let content = m.message;
+      for (let i = 0; i < 3; i++) {
+        const inner = unwrap(content);
+        if (!inner) break;
+        content = inner;
+      }
+      return content?.imageMessage || null;
+    };
+
+    const msg = getMsg(m);
+
+    if (!msg) {
+      return await sock.sendMessage(jid, { text: "⚠️ *BUTUH GAMBAR*\n\nSilakan kirim gambar dengan caption *!removebg* atau balas (reply) gambar yang sudah ada dengan perintah *!removebg*." }, { quoted: m });
     }
 
-    const msg = m.message;
-    if (!msg) return;
+    await sock.sendMessage(jid, { text: "⏳ *MOHON TUNGGU*\n\nSedang memproses penghapusan latar belakang gambar Anda. Mohon tunggu sebentar..." }, { quoted: m });
 
-    // Helper untuk mencari pesan gambar (seperti di sticker.js)
-    let imageMsg = msg.imageMessage;
-    if (!imageMsg && msg.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
-      imageMsg = msg.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
-    }
-
-    if (!imageMsg) {
-      return await sock.sendMessage(jid, { text: "❌ Balas gambar dengan !removebg atau kirim gambar dengan caption !removebg." }, { quoted: m });
-    }
-
-    // Cek limit
-    const sender = m.key.participant || m.key.remoteJid;
-    if (!checkRemoveBgLimit(sender)) {
-      return await sock.sendMessage(jid, { text: "❌ Anda sudah menggunakan fitur Remove BG hari ini atau belum mendaftar. Limit adalah 1x per hari." }, { quoted: m });
-    }
-
-    await sock.sendMessage(jid, { text: "⏳ Sedang menghapus background..." }, { quoted: m });
-
+    let publicId;
     try {
-      const stream = await downloadContentFromMessage(imageMsg, "image");
+      const stream = await downloadContentFromMessage(msg, "image");
       let buffer = Buffer.from([]);
-      for await(const chunk of stream) {
+      for await (const chunk of stream) {
         buffer = Buffer.concat([buffer, chunk]);
       }
 
-      const rbgResultData = await removeBg(buffer);
-      const outputBuffer = Buffer.from(rbgResultData);
+      const uploadRes = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream({ folder: "upload" }, (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }).end(buffer);
+      });
 
-      await sock.sendMessage(jid, { 
-        image: outputBuffer,
-        caption: "✨ Berhasil menghapus background!"
+      const publicUrl = uploadRes.secure_url;
+      publicId = uploadRes.public_id;
+
+      const response = await axios.post("https://puruboy-api.vercel.app/api/tools/removebg-v2", 
+        { url: publicUrl }, 
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+      if (!response.data || !response.data.url) {
+        throw new Error("Gagal mendapatkan hasil dari server.");
+      }
+
+      const finalImageUrl = response.data.url;
+
+      const responseImg = await axios.get(finalImageUrl, { responseType: 'arraybuffer' });
+      const finalBuffer = Buffer.from(responseImg.data);
+
+      await sock.sendMessage(jid, {
+        image: finalBuffer,
+        caption: "✨ *BERHASIL DIHAPUS*\n\nLatar belakang gambar Anda telah berhasil dihapus secara otomatis."
       }, { quoted: m });
 
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, { text: "❌ Gagal menghapus background. Mungkin file terlalu besar atau server sedang sibuk." }, { quoted: m });
+      await sock.sendMessage(jid, { text: "❌ *KESALAHAN PROSES*\n\nMaaf, terjadi kendala saat menghapus latar belakang gambar. Silakan coba beberapa saat lagi." }, { quoted: m });
+    } finally {
+      if (typeof publicId !== "undefined") {
+        await cloudinary.uploader.destroy(publicId).catch(() => {});
+      }
     }
   }
 };

@@ -2,33 +2,31 @@ const {LRUCache} = require("../utils/cache");
 
 const GPTAI_API = "https://puruboy-api.vercel.app/api/ai/notegpt";
 
-// Simple cache for GPT responses (10 minutes TTL)
 const gptCache = new LRUCache(100, 600000);
 
 module.exports = {
   name: "gptai",
   aliases: ["gpt"],
-  description: "Chat dengan GPT AI. Gunakan: !gptai <pertanyaan>",
+  description: "Asisten cerdas GPT AI untuk menjawab berbagai pertanyaan Anda secara mendalam.",
   async execute(sock, m, args, {jid}) {
     const prompt = args.join(" ");
 
     if (!prompt) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Mau tanya apa? Contoh: !gptai Siapa penemu lampu?"},
+        {text: "❌ *BUTUH PERTANYAAN*\n\nSilakan masukkan pertanyaan atau perintah yang ingin Anda ajukan kepada GPT AI.\n*Contoh:* !gpt Buatkan saya puisi pendek."},
         {quoted: m},
       );
     }
 
     try {
-      // OPTIMIZATION: Check cache first
       const cacheKey = `gpt:${prompt.toLowerCase()}`;
       const cachedResult = gptCache.get(cacheKey);
       if (cachedResult) {
         return await sock.sendMessage(jid, {text: cachedResult}, {quoted: m});
       }
 
-      await sock.sendMessage(jid, {text: "🤖 Berpikir..."}, {quoted: m});
+      await sock.sendMessage(jid, {text: "🤖 *MENGANALISIS...*\n\nGPT sedang memikirkan jawaban terbaik untuk Anda, mohon tunggu sebentar."}, {quoted: m});
 
       const response = await fetch(GPTAI_API, {
         method: "POST",
@@ -42,7 +40,7 @@ module.exports = {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`Koneksi API Gagal (${response.status})`);
       }
 
       let fullText = "";
@@ -66,9 +64,7 @@ module.exports = {
                   fullText += data.text;
                 }
               }
-            } catch (e) {
-              // Ignore parse errors
-            }
+            } catch (e) {}
           }
         }
       }
@@ -76,12 +72,11 @@ module.exports = {
       if (!fullText) {
         return await sock.sendMessage(
           jid,
-          {text: "❌ Gagal mendapatkan respons dari GPT AI"},
+          {text: "❌ *GAGAL*\n\nMaaf, sistem gagal mendapatkan respons dari GPT AI saat ini."},
           {quoted: m},
         );
       }
 
-      // Send response in chunks if too long
       if (fullText.length > 2000) {
         const chunks = fullText.match(/[\s\S]{1,2000}/g) || [];
         for (const chunk of chunks) {
@@ -92,11 +87,10 @@ module.exports = {
         await sock.sendMessage(jid, {text: fullText}, {quoted: m});
       }
 
-      // OPTIMIZATION: Cache the result
       gptCache.set(cacheKey, fullText);
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+      await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server AI. Silakan coba kembali nanti."}, {quoted: m});
     }
   },
 };

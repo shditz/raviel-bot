@@ -3,19 +3,19 @@ const TRANSLAPP_API = "https://puruboy-api.vercel.app/api/ai/translapp";
 module.exports = {
   name: "paraphrase",
   aliases: ["parafrasa", "ulang"],
-  description: "Tulis ulang teks dengan kata-kata yang berbeda. Gunakan: !paraphrase <teks>",
+  description: "Menulis ulang (parafrase) teks dengan gaya bahasa yang berbeda namun tetap mempertahankan inti pesan.",
   async execute(sock, m, args, {jid}) {
     const text = args.join(" ");
 
     if (!text) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Masukkan teks yang ingin diparafrase!\n\nGunakan: !paraphrase <teks>"},
+        {text: "❌ *MASUKKAN TEKS*\n\nSilakan masukkan teks yang ingin Anda tulis ulang (parafrase)!\n*Contoh:* !paraphrase Teknologi AI berkembang sangat pesat saat ini."},
         {quoted: m},
       );
     }
 
-    await sock.sendMessage(jid, {text: "✏️ Menulis ulang teks..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "⏳ *MEMPROSES...*\n\nSedang menulis ulang teks Anda dengan pilihan kata yang lebih bervariasi."}, {quoted: m});
 
     try {
       const response = await fetch(TRANSLAPP_API, {
@@ -28,7 +28,7 @@ module.exports = {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`Koneksi API Gagal (${response.status})`);
       }
 
       const data = await response.json();
@@ -36,7 +36,7 @@ module.exports = {
       if (!data.success || !data.result?.output) {
         return await sock.sendMessage(
           jid,
-          {text: "❌ Gagal menulis ulang teks. Coba lagi nanti!"},
+          {text: "❌ *GAGAL*\n\nSistem tidak dapat memproses parafrase untuk teks tersebut saat ini."},
           {quoted: m},
         );
       }
@@ -44,13 +44,17 @@ module.exports = {
       await sock.sendMessage(
         jid,
         {
-          text: `✍️ *Parafrase Teks*\n\n📝 *Original:*\n${data.result.input}\n\n✅ *Hasil:*\n${data.result.output}`,
+          text: `✍️ *PARAFRASE TEKS*\n\n` +
+                `📝 *Teks Asal:* \n_${data.result.input}_\n\n` +
+                `✅ *Hasil Parafrase:* \n*${data.result.output}*\n\n` +
+                `────────────────────\n` +
+                `_Gunakan hasil ini untuk menghindari plagiarisme._`,
         },
         {quoted: m},
       );
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+      await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server AI Parafrase. Silakan coba kembali nanti."}, {quoted: m});
     }
   },
 };

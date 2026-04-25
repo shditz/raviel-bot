@@ -3,20 +3,18 @@ const DRACIN_API = "https://puruboy-api.vercel.app/api/ai/dracin";
 module.exports = {
   name: "dracintts",
   aliases: ["dracin", "dtts"],
-  description:
-    "TTS dengan Dracin. Gunakan: !dracintts <text> atau !dracintts --music false --speed 1.5 <text>",
+  description: "Mengonversi teks menjadi suara (TTS) dengan karakter suara khas Dracin.",
   async execute(sock, m, args, {jid}) {
     if (!args.length) {
       return await sock.sendMessage(
         jid,
         {
-          text: "❌ Gunakan: !dracintts <text>\n\nOpsi tambahan:\n--music true/false (default: true)\n--speed 0.5-2.0 (default: 1.0)\n--volume 0.1-1.0 (default: 0.3)\n\nContoh: !dracintts --music false --speed 1.5 Halo apa kabar?",
+          text: `❌ *FORMAT SALAH*\n\nGunakan: *!dracin <teks>*\n\n💡 *Opsi Tambahan:*\n• \`--music true/false\`\n• \`--speed 0.5-2.0\`\n• \`--volume 0.1-1.0\`\n\n*Contoh:* !dracin --music false --speed 1.5 Halo apa kabar?`,
         },
         {quoted: m},
       );
     }
 
-    // Parse parameters
     let text = "";
     let music = true;
     let speed = 1.0;
@@ -44,12 +42,12 @@ module.exports = {
     if (!text) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Masukkan teks yang ingin diubah menjadi suara!"},
+        {text: "❌ *MASUKKAN TEKS*\n\nSilakan masukkan teks yang ingin Anda ubah menjadi pesan suara!"},
         {quoted: m},
       );
     }
 
-    await sock.sendMessage(jid, {text: "🎙️ Membuat suara..."}, {quoted: m});
+    await sock.sendMessage(jid, {text: "🎙️ *MEMBUAT SUARA...*\n\nSedang mengonversi teks Anda menjadi audio berkualitas dengan suara Dracin AI."}, {quoted: m});
 
     try {
       const response = await fetch(DRACIN_API, {
@@ -64,16 +62,15 @@ module.exports = {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`Koneksi API Gagal (${response.status})`);
       }
 
       const data = await response.json();
 
       if (!data.success || !data.result?.audio) {
-        return await sock.sendMessage(jid, {text: "❌ Gagal membuat TTS dari Dracin"}, {quoted: m});
+        return await sock.sendMessage(jid, {text: "❌ *GAGAL*\n\nMaaf, sistem gagal membuat audio dari Dracin AI saat ini."}, {quoted: m});
       }
 
-      // Send audio
       await sock.sendMessage(
         jid,
         {
@@ -84,11 +81,12 @@ module.exports = {
         {quoted: m},
       );
 
-      // Send text info
-      await sock.sendMessage(jid, {text: `✅ Teks: ${data.result.text}`}, {quoted: m});
+      await sock.sendMessage(jid, {
+          text: `✅ *KONVERSI BERHASIL*\n\n📝 *Teks:* \n_${data.result.text}_`
+      }, {quoted: m});
     } catch (err) {
       console.error(err);
-      await sock.sendMessage(jid, {text: "❌ Terjadi kesalahan. Coba lagi nanti!"}, {quoted: m});
+      await sock.sendMessage(jid, {text: "❌ *KESALAHAN SISTEM*\n\nTerjadi kendala saat menghubungi server audio AI. Silakan coba kembali nanti."}, {quoted: m});
     }
   },
 };

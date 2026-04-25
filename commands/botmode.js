@@ -3,13 +3,12 @@ const {getBotMode, setBotMode} = require("../database/db");
 
 module.exports = {
   name: "botmode",
-  description: "Mengatur mode bot (grup saja atau grup + DM pribadi).",
+  description: "Mengatur mode operasional bot (Grup Only atau Grup + DM).",
   async execute(sock, m, args, {jid, sender}) {
-    // Cek apakah pengguna adalah owner
     if (sender !== `${config.ownerNumber}@s.whatsapp.net`) {
       return await sock.sendMessage(
         jid,
-        {text: "❌ Hanya owner yang bisa menggunakan command ini!"},
+        {text: "❌ *AKSES DITOLAK*\n\nMaaf, hanya Pemilik Bot (Owner) yang memiliki wewenang untuk mengakses pengaturan sistem ini!"},
         {quoted: m},
       );
     }
@@ -23,9 +22,9 @@ module.exports = {
           jid,
           {
             text:
-              "✅ *Mode Bot Diubah!*\n\n" +
-              "Bot sekarang hanya merespons di **GRUP SAJA**.\n" +
-              "Chat pribadi akan diabaikan sepenuhnya.",
+              "✅ *PENGATURAN DIPERBARUI*\n\n" +
+              "Bot kini beroperasi dalam mode: *GRUP SAJA*\n" +
+              "Seluruh pesan dari chat pribadi akan diabaikan demi efisiensi sistem.",
           },
           {quoted: m},
         );
@@ -37,7 +36,9 @@ module.exports = {
           jid,
           {
             text:
-              "✅ *Mode Bot Diubah!*\n\n" + "Bot sekarang merespons di **GRUP DAN DM PRIBADI**.",
+              "✅ *PENGATURAN DIPERBARUI*\n\n" + 
+              "Bot kini beroperasi dalam mode: *SEMUA (GRUP & DM)*\n" +
+              "Bot akan merespons perintah baik di dalam grup maupun chat pribadi.",
           },
           {quoted: m},
         );
@@ -46,44 +47,42 @@ module.exports = {
       if (subcommand === "info") {
         const currentMode = getBotMode();
         const modeText =
-          currentMode === "group" ? "🔴 GRUP SAJA (DM diabaikan)" : "🟢 GRUP + DM PRIBADI";
+          currentMode === "group" ? "🔴 GRUP SAJA" : "🟢 GRUP + DM PRIBADI";
         const description =
           currentMode === "group"
-            ? "Bot hanya merespons di grup, chat pribadi akan diabaikan."
-            : "Bot merespons di grup maupun chat pribadi.";
+            ? "Bot saat ini hanya aktif di dalam lingkungan grup."
+            : "Bot aktif sepenuhnya di grup maupun chat pribadi.";
 
         return await sock.sendMessage(
           jid,
           {
             text:
-              `╭━━━━ ⚙️ *BOT MODE* ━━━━╮\n` +
+              `╭━━━━━ ⚙️ *KONFIGURASI BOT* ━━━━━╮\n` +
               `┃\n` +
-              `┃ Mode Saat Ini: ${modeText}\n` +
+              `┃ 💠 *Mode Operasi:* ${modeText}\n` +
+              `┃ 📝 *Deskripsi:* ${description}\n` +
               `┃\n` +
-              `┃ ${description}\n` +
+              `┃ 🛠️ *Ubah Konfigurasi:*\n` +
+              `┃ • \`!botmode group\` - (Grup Saja)\n` +
+              `┃ • \`!botmode all\` - (Grup & DM)\n` +
               `┃\n` +
-              `┃ Ubah Mode:\n` +
-              `┃ • \`!botmode group\` - Grup saja\n` +
-              `┃ • \`!botmode all\` - Grup + DM\n` +
-              `┃\n` +
-              `╰━━━━━━━━━━━━━━━━━━━━━━╯`,
+              `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
           },
           {quoted: m},
         );
       }
 
-      // Jika subcommand tidak dikenal
       return await sock.sendMessage(
         jid,
         {
           text:
-            `❓ *Subcommand tidak dikenal!*\n\n` +
-            `Penggunaan:\n` +
-            `┌─────────────────────────\n` +
-            `│ \`!botmode all\` - Bot di grup + DM\n` +
-            `│ \`!botmode group\` - Bot di grup saja\n` +
-            `│ \`!botmode info\` - Lihat mode saat ini\n` +
-            `└─────────────────────────`,
+            `❓ *PERINTAH TIDAK DIKENAL*\n\n` +
+            `Gunakan salah satu opsi berikut:\n` +
+            `┌───────────────────────────────\n` +
+            `│ • *!botmode all*   : Mode Grup & DM\n` +
+            `│ • *!botmode group* : Mode Grup Saja\n` +
+            `│ • *!botmode info*  : Cek Mode Saat Ini\n` +
+            `└───────────────────────────────`,
         },
         {quoted: m},
       );
@@ -91,7 +90,7 @@ module.exports = {
       console.error("Error pada command botmode:", err);
       return await sock.sendMessage(
         jid,
-        {text: `❌ Terjadi kesalahan: ${err.message}`},
+        {text: `❌ *KESALAHAN SISTEM*\n\nGagal memperbarui konfigurasi: ${err.message}`},
         {quoted: m},
       );
     }
