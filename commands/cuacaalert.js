@@ -40,17 +40,14 @@ module.exports = {
 
       items.forEach((item, i) => {
         body +=
-          `╭━━━━━━━ 🔴 *ALERT ${i + 1}* ━━━━━━━╮\n` +
-          `┃\n` +
-          `┃ 📌 *Judul:* \n┃ ${item.title}\n` +
-          `┃\n` +
-          `┃ 📅 *Waktu:* ${item.pubDate}\n` +
-          `┃ 👤 *Sumber:* ${item.author}\n` +
-          `┃\n` +
-          `┃ 📝 *Keterangan:* \n` +
-          `┃ ${item.description.split("\n").join("\n┃ ")}\n` +
-          `┃\n` +
-          `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+          `🔴 *ALERT ${i + 1}*\n` +
+          `────────────────────\n` +
+          `📌 *Judul:* \n${item.title}\n\n` +
+          `📅 *Waktu:* ${item.pubDate}\n` +
+          `👤 *Sumber:* ${item.author}\n\n` +
+          `📝 *Keterangan:* \n` +
+          `${item.description}\n` +
+          `────────────────────\n\n`;
       });
 
       body += `_Sumber: BMKG Indonesia (Badan Meteorologi, Klimatologi, dan Geofisika)_`;

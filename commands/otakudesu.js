@@ -9,6 +9,40 @@ const api = axios.create({
   }
 });
 
+async function fetchWithRetry(url, options = {}, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await api.get(url, options);
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      const isNetworkError = err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.code === 'ENOTFOUND';
+      const isServerError = err.response && err.response.status >= 500;
+      if (isNetworkError || isServerError) {
+        console.log(`[Retry ${i+1}/${retries}] Failed to fetch ${url}: ${err.message}`);
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+async function getBuffer(url) {
+  if (!url) return null;
+  try {
+    const res = await api.get(url, { 
+      responseType: "arraybuffer",
+      headers: {
+        "Referer": "https://otakudesu.blog/"
+      }
+    });
+    return Buffer.from(res.data, "binary");
+  } catch (err) {
+    console.warn(`⚠️ [getBuffer] Gagal mengambil gambar (${url}): ${err.message}`);
+    return null;
+  }
+}
+
 module.exports = {
   name: "otakudesu",
   aliases: ["otd", "anime"],
@@ -18,12 +52,12 @@ module.exports = {
     const query = args.slice(1).join(" ");
 
     const helpMessage = `📺 *OTAKUDESU ANIME CENTER*\n\n` +
-      `Silakan gunakan perintah di bawah untuk menjelajah anime:\n\n` +
-      `┌──────────────────────────────\n` +
-      `│ 🔍 *${PREFIX}otakudesu search* <judul>\n` +
-      `│ 📄 *${PREFIX}otakudesu detail* <slug>\n` +
-      `│ 📺 *${PREFIX}otakudesu watch* <slug_eps>\n` +
-      `└──────────────────────────────\n\n` +
+      `Silakan gunakan perintah di bawah untuk menjelajah anime:\n` +
+      `────────────────────\n` +
+      `🔍 *${PREFIX}otakudesu search* <judul>\n` +
+      `📄 *${PREFIX}otakudesu detail* <slug>\n` +
+      `📺 *${PREFIX}otakudesu watch* <slug_eps>\n` +
+      `────────────────────\n\n` +
       `_Pilih menu pencarian untuk memulai pengalaman menonton Anda._`;
 
     if (!subCommand) {
@@ -36,7 +70,7 @@ module.exports = {
         
         await sock.sendMessage(jid, { text: "⏳ *MENCARI ANIME...*\n\nSedang menelusuri database Otakudesu, mohon tunggu sebentar." }, { quoted: m });
         
-        const res = await api.get(`https://shivraapi.my.id/otd/search?q=${encodeURIComponent(query)}`);
+        const res = await fetchWithRetry(`https://shivraapi.my.id/otd/search?q=${encodeURIComponent(query)}`);
         const data = res.data;
 
         if (!data?.meta?.status || !data?.data?.list || data.data.list.length === 0) {
@@ -81,7 +115,7 @@ module.exports = {
 
         await sock.sendMessage(jid, { text: "⏳ *MEMUAT DETAIL...*\n\nSedang mengambil informasi lengkap dan daftar episode anime." }, { quoted: m });
 
-        const res = await api.get(`https://shivraapi.my.id/otd/anime/${query}`);
+        const res = await fetchWithRetry(`https://shivraapi.my.id/otd/anime/${query}`);
         const data = res.data;
 
         if (!data?.meta?.status || !data?.data) {
@@ -90,6 +124,7 @@ module.exports = {
 
         const anime = data.data;
         const genres = Array.isArray(anime.genre) ? anime.genre.map(g => g.name || g).join(", ") : (anime.genre || "-");
+        const coverBuffer = anime.cover ? await getBuffer(anime.cover) : null;
         
         let detailText = `🎬 *DETAIL ANIME: ${anime.title}*\n\n`;
         detailText += `🇯🇵 *Japanese:* ${anime.japanese || "-"}\n`;
@@ -124,7 +159,7 @@ module.exports = {
 
           await sock.sendMessage(jid, {
             interactiveMessage: {
-              image: anime.cover ? { url: anime.cover } : config.botImage,
+              image: coverBuffer || config.errorImage,
               title: detailText,
               footer: `Silakan pilih episode di bawah untuk mulai menonton`,
               buttons: [{ name: "single_select", buttonParamsJson: buttonParamsJson }]
@@ -140,10 +175,10 @@ module.exports = {
           epsText += `\n────────────────────\n`;
           epsText += `💡 _Ketik *${PREFIX}otakudesu watch <slug>* untuk menonton._`;
           
-          if (anime.cover) {
-            await sock.sendMessage(jid, { image: { url: anime.cover }, caption: epsText }, { quoted: m });
+          if (coverBuffer) {
+            await sock.sendMessage(jid, { image: coverBuffer, caption: epsText }, { quoted: m });
           } else {
-            await sock.sendMessage(jid, { text: epsText }, { quoted: m });
+            await sock.sendMessage(jid, { image: config.errorImage, caption: epsText }, { quoted: m });
           }
         }
 
@@ -152,7 +187,7 @@ module.exports = {
 
         await sock.sendMessage(jid, { text: "📺 *MENYIAPKAN PEMUTAR...*\n\nSedang mengambil tautan video dan opsi unduhan, mohon tunggu sebentar." }, { quoted: m });
 
-        const res = await api.get(`https://shivraapi.my.id/otd/episode/${query}`);
+        const res = await fetchWithRetry(`https://shivraapi.my.id/otd/episode/${query}`);
         const data = res.data;
 
         if (!data?.meta?.status || !data?.data) {

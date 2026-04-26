@@ -70,10 +70,9 @@ module.exports = {
       await sock.sendMessage(jid, {
         text: `❓ *PANDUAN QR CODE*\n\n` +
               `Silakan pilih salah satu perintah berikut:\n` +
-              `┌──────────────────────────────\n` +
-              `│ • *!qr generate <teks>* : Buat QR\n` +
-              `│ • *!qr scan* : Baca QR (reply foto)\n` +
-              `└──────────────────────────────`
+              `────────────────────\n` +
+              `• *!qr generate <teks>* : Buat QR\n` +
+              `• *!qr scan* : Baca QR (reply foto)`
       }, {quoted: m});
     }
   },

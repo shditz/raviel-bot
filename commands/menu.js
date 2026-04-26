@@ -9,7 +9,7 @@ module.exports = {
     const commandInfo = args[0]?.toLowerCase();
     
     if (!commandInfo) {
-      await sendMenuWithImage(sock, jid, sender);
+      await sendMenuWithImage(sock, jid, sender, m);
       return;
     }
 

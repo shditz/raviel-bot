@@ -27,12 +27,12 @@ module.exports = {
     }
 
     const helpMessage = `📖 *RAVIEL NOVEL LIBRARY*\n\n` +
-      `Silakan gunakan perintah di bawah untuk menjelajah novel:\n\n` +
-      `┌──────────────────────────────\n` +
-      `│ 🔍 *${PREFIX}novel search* <judul>\n` +
-      `│ 📄 *${PREFIX}novel detail* <slug>\n` +
-      `│ 📖 *${PREFIX}novel read* <slug_chapter>\n` +
-      `└──────────────────────────────\n\n` +
+      `Silakan gunakan perintah di bawah untuk menjelajah novel:\n` +
+      `────────────────────\n` +
+      `🔍 *${PREFIX}novel search* <judul>\n` +
+      `📄 *${PREFIX}novel detail* <slug>\n` +
+      `📖 *${PREFIX}novel read* <slug_chapter>\n` +
+      `────────────────────\n\n` +
       `_Pilih menu pencarian untuk memulai pengalaman membaca Anda._`;
 
     if (!subCommand) {

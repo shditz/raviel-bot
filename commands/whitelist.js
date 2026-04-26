@@ -128,40 +128,36 @@ module.exports = {
             jid,
             {
               text:
-                `╭━━━ 📋 *DAFTAR WHITELIST* ━━━╮\n` +
-                `┃\n` +
-                `┃ 🛡️ *Status:* ${statusText}\n` +
-                `┃\n` +
-                `┃ ❌ Belum ada grup terdaftar.\n` +
-                `┃\n` +
-                `┃ _Gunakan !whitelist add di grup_\n` +
-                `┃ _untuk mendaftarkan akses._\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
+              `📋 *DAFTAR WHITELIST*\n` +
+              `────────────────────\n` +
+              `🛡️ *Status:* ${statusText}\n` +
+              `────────────────────\n` +
+              `❌ Belum ada grup terdaftar.\n\n` +
+              `💡 _Gunakan !whitelist add di grup untuk mendaftarkan akses._`,
             },
             {quoted: m},
           );
         }
 
         let listText =
-          `╭━━━ 📋 *DAFTAR WHITELIST* ━━━╮\n` +
-          `┃\n` +
-          `┃ 🛡️ *Status:* ${statusText}\n` +
-          `┃ 📊 *Total:* ${whitelistData.groups.length} Grup\n` +
-          `┃\n`;
+          `📋 *DAFTAR WHITELIST*\n` +
+          `────────────────────\n` +
+          `🛡️ *Status:* ${statusText}\n` +
+          `📊 *Total:* ${whitelistData.groups.length} Grup\n` +
+          `────────────────────\n`;
 
         for (let i = 0; i < whitelistData.groups.length; i++) {
           try {
             const groupId = whitelistData.groups[i];
             const metadata = await sock.groupMetadata(groupId);
-            listText += `┃ ${i + 1}. *${metadata.subject}*\n`;
-            listText += `┃    ID: ${groupId}\n`;
+            listText += `🔹 *${metadata.subject}*\n`;
+            listText += `   ID: ${groupId}\n`;
           } catch (err) {
-            listText += `┃ ${i + 1}. *(Grup Tidak Ditemukan)*\n`;
+            listText += `🔸 *(Grup Tidak Ditemukan)*\n`;
           }
         }
-
-        listText += `┃\n` + `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+        
+        listText += `────────────────────`;
 
         return await sock.sendMessage(jid, {text: listText}, {quoted: m});
       }
@@ -172,13 +168,12 @@ module.exports = {
           text:
             `❓ *SUB-COMMAND TIDAK VALID*\n\n` +
             `Gunakan salah satu opsi berikut:\n` +
-            `┌─────────────────────────\n` +
-            `│ • \`!whitelist enable\`\n` +
-            `│ • \`!whitelist disable\`\n` +
-            `│ • \`!whitelist add\`\n` +
-            `│ • \`!whitelist remove\`\n` +
-            `│ • \`!whitelist list\`\n` +
-            `└─────────────────────────`,
+            `────────────────────\n` +
+            `• \`!whitelist enable\`\n` +
+            `• \`!whitelist disable\`\n` +
+            `• \`!whitelist add\`\n` +
+            `• \`!whitelist remove\`\n` +
+            `• \`!whitelist list\``,
         },
         {quoted: m},
       );

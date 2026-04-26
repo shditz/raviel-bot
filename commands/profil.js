@@ -8,17 +8,15 @@ module.exports = {
     
     await sock.sendMessage(jid, {
       text:
-        `╭━━━━━━━━ 👤 *PROFIL USER* ━━━━━━━━╮\n` +
-        `┃\n` +
-        `┃ 📛 *Nama:* ${u.name}\n` +
-        `┃ 🎂 *Umur:* ${u.age} Tahun\n` +
-        `┃ 📅 *Join:* ${new Date(u.registeredAt).toLocaleDateString("id-ID")}\n` +
-        `┃\n` +
-        `┃ 🛡️ *STATISTIK KEAMANAN:*\n` +
-        `┃ ⚠️ *Warn:* ${u.warn || 0} / 3\n` +
-        `┃ 🛡️ *Status:* Terverifikasi\n` +
-        `┃\n` +
-        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
+        `👤 *PROFIL USER*\n` +
+        `────────────────────\n` +
+        `📛 *Nama:* ${u.name}\n` +
+        `🎂 *Umur:* ${u.age} Tahun\n` +
+        `📅 *Join:* ${new Date(u.registeredAt).toLocaleDateString("id-ID")}\n` +
+        `────────────────────\n` +
+        `🛡️ *STATISTIK KEAMANAN:*\n` +
+        `⚠️ *Warn:* ${u.warn || 0} / 3\n` +
+        `🛡️ *Status:* Terverifikasi`,
     }, { quoted: m });
   }
 };

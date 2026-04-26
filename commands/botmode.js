@@ -57,16 +57,14 @@ module.exports = {
           jid,
           {
             text:
-              `╭━━━━━ ⚙️ *KONFIGURASI BOT* ━━━━━╮\n` +
-              `┃\n` +
-              `┃ 💠 *Mode Operasi:* ${modeText}\n` +
-              `┃ 📝 *Deskripsi:* ${description}\n` +
-              `┃\n` +
-              `┃ 🛠️ *Ubah Konfigurasi:*\n` +
-              `┃ • \`!botmode group\` - (Grup Saja)\n` +
-              `┃ • \`!botmode all\` - (Grup & DM)\n` +
-              `┃\n` +
-              `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
+              `⚙️ *KONFIGURASI BOT*\n` +
+              `────────────────────\n` +
+              `💠 *Mode Operasi:* ${modeText}\n` +
+              `📝 *Deskripsi:* ${description}\n` +
+              `────────────────────\n` +
+              `🛠️ *Ubah Konfigurasi:*\n` +
+              `• \`!botmode group\` - (Grup Saja)\n` +
+              `• \`!botmode all\` - (Grup & DM)`,
           },
           {quoted: m},
         );
@@ -78,11 +76,10 @@ module.exports = {
           text:
             `❓ *PERINTAH TIDAK DIKENAL*\n\n` +
             `Gunakan salah satu opsi berikut:\n` +
-            `┌───────────────────────────────\n` +
-            `│ • *!botmode all*   : Mode Grup & DM\n` +
-            `│ • *!botmode group* : Mode Grup Saja\n` +
-            `│ • *!botmode info*  : Cek Mode Saat Ini\n` +
-            `└───────────────────────────────`,
+            `────────────────────\n` +
+            `• *!botmode all*   : Mode Grup & DM\n` +
+            `• *!botmode group* : Mode Grup Saja\n` +
+            `• *!botmode info*  : Cek Mode Saat Ini`,
         },
         {quoted: m},
       );

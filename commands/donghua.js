@@ -27,12 +27,12 @@ module.exports = {
     }
 
     const helpMessage = `🐲 *DONGHUA CENTER*\n\n` +
-      `Silakan gunakan perintah di bawah untuk menjelajah donghua:\n\n` +
-      `┌──────────────────────────────\n` +
-      `│ 🔍 *${PREFIX}donghua search* <judul>\n` +
-      `│ 📄 *${PREFIX}donghua detail* <slug>\n` +
-      `│ 📺 *${PREFIX}donghua watch* <slug_eps>\n` +
-      `└──────────────────────────────\n\n` +
+      `Silakan gunakan perintah di bawah untuk menjelajah donghua:\n` +
+      `────────────────────\n` +
+      `🔍 *${PREFIX}donghua search* <judul>\n` +
+      `📄 *${PREFIX}donghua detail* <slug>\n` +
+      `📺 *${PREFIX}donghua watch* <slug_eps>\n` +
+      `────────────────────\n\n` +
       `_Pilih menu pencarian untuk memulai pengalaman menonton Anda._`;
 
     if (!subCommand) {

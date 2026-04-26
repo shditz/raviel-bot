@@ -14,19 +14,16 @@ module.exports = {
       const creationDate = new Date(metadata.creation * 1000).toLocaleString("id-ID");
 
       const body = 
-        `╭━━━━━━━ 🏢 *GROUP INFO* ━━━━━━━╮\n` +
-        `┃\n` +
-        `┃ 📛 *Nama Grup:* \n┃ ${metadata.subject}\n` +
-        `┃\n` +
-        `┃ 👑 *Pemilik:* @${owner.split("@")[0]}\n` +
-        `┃ 📅 *Dibuat:* ${creationDate}\n` +
-        `┃ 👥 *Total Anggota:* ${participants.length}\n` +
-        `┃ 👮 *Total Admin:* ${admins.length}\n` +
-        `┃\n` +
-        `┃ 📝 *Deskripsi:* \n` +
-        `┃ ${metadata.desc ? metadata.desc.split("\n").join("\n┃ ") : "Tidak ada deskripsi."}\n` +
-        `┃\n` +
-        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+        `🏢 *GROUP INFO*\n` +
+        `────────────────────\n` +
+        `📛 *Nama Grup:* \n${metadata.subject}\n\n` +
+        `👑 *Pemilik:* @${owner.split("@")[0]}\n` +
+        `📅 *Dibuat:* ${creationDate}\n` +
+        `👥 *Total Anggota:* ${participants.length}\n` +
+        `👮 *Total Admin:* ${admins.length}\n` +
+        `────────────────────\n` +
+        `📝 *Deskripsi:* \n` +
+        `${metadata.desc ? metadata.desc : "Tidak ada deskripsi."}`;
 
       await sock.sendMessage(jid, { 
         text: body,

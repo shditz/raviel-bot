@@ -9,6 +9,7 @@ let imageCache = {
   speedImage: null,
   runtimeImage: null,
   statusImage: null,
+  errorImage: null,
 };
 
 let isLoadingImages = false;
@@ -26,6 +27,7 @@ async function preloadImages() {
       fs.readFile(path.join(__dirname, "assets", "image", "speed.webp")),
       fs.readFile(path.join(__dirname, "assets", "image", "runtime.webp")),
       fs.readFile(path.join(__dirname, "assets", "image", "status.jfif")),
+      fs.readFile(path.join(__dirname, "assets", "image", "error.jfif")),
     ]);
 
     imageCache = {
@@ -35,6 +37,7 @@ async function preloadImages() {
       speedImage: speed,
       runtimeImage: runtime,
       statusImage: status,
+      errorImage: error,
     };
 
     imagesLoaded = true;
@@ -61,6 +64,7 @@ function getImage(imageName) {
       speedImage: path.join(imagePath, "speed.webp"),
       runtimeImage: path.join(imagePath, "runtime.webp"),
       statusImage: path.join(imagePath, "status.jfif"),
+      errorImage: path.join(imagePath, "error.jfif"),
     };
     return require("fs").readFileSync(fileMap[imageName]);
   } catch (err) {
@@ -91,6 +95,9 @@ module.exports = {
   },
   get statusImage() {
     return getImage("statusImage");
+  },
+  get errorImage() {
+    return getImage("errorImage");
   },
   preloadImages,
   isImagesLoaded: () => imagesLoaded,
