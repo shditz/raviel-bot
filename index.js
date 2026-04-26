@@ -62,6 +62,7 @@ if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, {recursive: true});
 const logger = pino({level: "fatal"});
 
 const gameSessions = new Map();
+const userCommandHistory = new Map();
 
 const store = makeInMemoryStore({logger: pino().child({level: "silent", stream: "store"})});
 store.readFromFile("./auth/baileys_store_multi.json");
@@ -236,24 +237,24 @@ async function connectToWhatsApp() {
       console.log("👤 User:", sock.user?.id);
 
       setTimeout(async () => {
-        const { restarted, restartJid } = getSettings();
+        const {restarted, restartJid} = getSettings();
         const ownerJid = config.ownerNumber + "@s.whatsapp.net";
-        
+
         const notifyMsg = [
-            `🚀 *NOTIFIKASI SISTEM*`,
-            `────────────────────`,
-            `✅ Bot telah berhasil terhubung dan sekarang online!`,
-            `📅 Tanggal: ${new Date().toLocaleDateString("id-ID")}`,
-            `⌚ Waktu: ${new Date().toLocaleTimeString("id-ID")} WIB`,
-            `────────────────────`,
+          `🚀 *NOTIFIKASI SISTEM*`,
+          `────────────────────`,
+          `✅ Bot telah berhasil terhubung dan sekarang online!`,
+          `📅 Tanggal: ${new Date().toLocaleDateString("id-ID")}`,
+          `⌚ Waktu: ${new Date().toLocaleTimeString("id-ID")} WIB`,
+          `────────────────────`,
         ].join("\n");
 
         if (restarted && restartJid) {
-          await sock.sendMessage(restartJid, { text: notifyMsg });
-          updateSettings({ restarted: false, restartJid: null });
+          await sock.sendMessage(restartJid, {text: notifyMsg});
+          updateSettings({restarted: false, restartJid: null});
         } else {
-          await sock.sendMessage(ownerJid, { text: notifyMsg });
-          updateSettings({ restarted: false, restartJid: null });
+          await sock.sendMessage(ownerJid, {text: notifyMsg});
+          updateSettings({restarted: false, restartJid: null});
         }
       }, 3000);
 
@@ -377,7 +378,9 @@ async function connectToWhatsApp() {
         if (text.startsWith(currentPrefix)) {
           await sock.sendMessage(
             jid,
-            {text: `⚠️ *PEMELIHARAAN SISTEM*\n\nServer kami sedang dalam masa pembaruan. Kami akan segera kembali online. Terima kasih atas kesabaran Anda.`},
+            {
+              text: `⚠️ *PEMELIHARAAN SISTEM*\n\nServer kami sedang dalam masa pembaruan. Kami akan segera kembali online. Terima kasih atas kesabaran Anda.`,
+            },
             {quoted: m},
           );
         }
@@ -388,7 +391,9 @@ async function connectToWhatsApp() {
         if (text.startsWith(currentPrefix)) {
           await sock.sendMessage(
             jid,
-            {text: `❌ *AKSES DIBATASI*\n\nAkun Anda telah dibatasi dari penggunaan layanan ini karena adanya pelanggaran kebijakan.`},
+            {
+              text: `❌ *AKSES DIBATASI*\n\nAkun Anda telah dibatasi dari penggunaan layanan ini karena adanya pelanggaran kebijakan.`,
+            },
             {quoted: m},
           );
         }
@@ -399,6 +404,11 @@ async function connectToWhatsApp() {
         const session = gameSessions.get(jid);
         if (session && text) {
           if (text.toLowerCase() === session.answer.toLowerCase()) {
+            // Clear timeout jika ada
+            if (session.timeoutId) {
+              clearTimeout(session.timeoutId);
+            }
+
             const timeTaken = ((Date.now() - session.startTime) / 1000).toFixed(1);
             await sock.sendMessage(
               jid,
@@ -443,6 +453,37 @@ async function connectToWhatsApp() {
         commands.get(cmd) || Array.from(commands.values()).find((c) => c.aliases?.includes(cmd));
 
       if (command) {
+        // Rate limiting logic
+        const now = Date.now();
+        const history = userCommandHistory.get(sender) || [];
+        const recentHistory = history.filter((ts) => now - ts < 60000);
+
+        if (recentHistory.length >= 10 && !isOwner) {
+          return await sock.sendMessage(
+            jid,
+            {
+              text: `⚠️ *RATE LIMIT TERDETEKSI*\n\nMaaf @${
+                sender.split("@")[0]
+              }, Anda telah mencapai batas penggunaan (10 perintah/menit). Silakan coba lagi dalam beberapa saat agar bot tetap aman.`,
+              mentions: [sender],
+            },
+            {quoted: m},
+          );
+        }
+
+        recentHistory.push(now);
+        userCommandHistory.set(sender, recentHistory);
+
+        // Human-like simulation
+        try {
+          await sock.readMessages([m.key]); // Mark as read
+          await sock.sendPresenceUpdate("composing", jid); // Show typing
+          await delay(1500 + Math.random() * 1500); // Random delay 1.5s - 3s
+          await sock.sendPresenceUpdate("paused", jid); // Stop typing
+        } catch (simErr) {
+          console.error("Simulation error:", simErr.message);
+        }
+
         try {
           await command.execute(sock, m, args, {
             jid,
@@ -468,18 +509,12 @@ async function connectToWhatsApp() {
         } catch (err) {
           await sock.sendMessage(
             jid,
-            {text: `❌ *KESALAHAN INTERNAL*\n\nTerjadi kesalahan tak terduga saat menjalankan perintah. Silakan lapor ke administrator jika masalah berlanjut.`},
+            {
+              text: `❌ *KESALAHAN INTERNAL*\n\nTerjadi kesalahan tak terduga saat menjalankan perintah. Silakan lapor ke administrator jika masalah berlanjut.`,
+            },
             {quoted: m},
           );
         }
-      } else {
-        await sock.sendMessage(
-          jid,
-          {
-            text: `❓ *PERINTAH TIDAK DIKENAL*\n\nPerintah *${currentPrefix}${cmd}* tidak ditemukan. Silakan gunakan *${currentPrefix}menu* untuk melihat layanan yang tersedia.`,
-          },
-          {quoted: m},
-        );
       }
     } catch (err) {
       if (!err.message?.includes("Bad MAC") && !err.message?.includes("decrypt")) {

@@ -17,6 +17,7 @@ module.exports = {
         `🏢 *GROUP INFO*\n` +
         `────────────────────\n` +
         `📛 *Nama Grup:* \n${metadata.subject}\n\n` +
+        `🆔 *ID Grup:* \n${jid}\n\n` +
         `👑 *Pemilik:* @${owner.split("@")[0]}\n` +
         `📅 *Dibuat:* ${creationDate}\n` +
         `👥 *Total Anggota:* ${participants.length}\n` +
