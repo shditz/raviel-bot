@@ -1,0 +1,111 @@
+{
+  "6282268744897@s.whatsapp.net": {
+    "id": "6282268744897@s.whatsapp.net",
+    "name": "ShDitz",
+    "level": 7,
+    "exp": 615,
+    "money": 5266,
+    "hp": 147,
+    "maxHp": 160,
+    "atk": 22,
+    "def": 11,
+    "spd": 11,
+    "luck": 5,
+    "mana": 80,
+    "maxMana": 80,
+    "stamina": 100,
+    "maxStamina": 100,
+    "statPoints": 18,
+    "inventory": {
+      "health_potion": 2,
+      "golden_chest": 1,
+      "iron_ore": 2,
+      "slime_gel": 1
+    },
+    "equipment": {
+      "weapon": null,
+      "armor": null,
+      "accessory": null
+    },
+    "equipmentUpgrades": {
+      "weapon": 0,
+      "armor": 0,
+      "accessory": 0
+    },
+    "quest": {
+      "daily": {
+        "id": "q3",
+        "desc": "Menebang Kayu (Wood) 3 kali",
+        "target": 3,
+        "progress": 0,
+        "type": "wood",
+        "reward": {
+          "money": 300,
+          "exp": 150
+        }
+      },
+      "completed": 0,
+      "lastClaim": 0
+    },
+    "pet": {
+      "active": null,
+      "list": []
+    },
+    "guild": null,
+    "activeTitle": null,
+    "titles": [
+      "Beginner"
+    ],
+    "achievements": {},
+    "cooldowns": {
+      "hunt": 1777257777905,
+      "mine": 1777255932688,
+      "crime": 1777257824347,
+      "battle": 1777258849083,
+      "daily_quest": 1777258973404
+    },
+    "stats": {
+      "huntCount": 2,
+      "battleWin": 1,
+      "itemCraft": 0,
+      "dungeonClear": 0
+    },
+    "skills": [
+      "basic_attack"
+    ],
+    "location": "village",
+    "unlockedAreas": [
+      "village",
+      "forest"
+    ],
+    "bank": {
+      "money": 0,
+      "items": {}
+    },
+    "collection": {
+      "monsters": [],
+      "items": [],
+      "pets": []
+    },
+    "rebirth": {
+      "count": 0,
+      "points": 0
+    },
+    "partner": null,
+    "job": "novice",
+    "party": null,
+    "buffs": [],
+    "storyProgress": {
+      "chapter": 1,
+      "step": 1
+    },
+    "dailyReward": {
+      "streak": 1,
+      "lastClaim": 1777255820287
+    },
+    "weeklyReward": {
+      "lastClaim": 1777255834423
+    },
+    "lastRegen": 1777255406771
+  }
+}

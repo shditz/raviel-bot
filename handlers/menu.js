@@ -57,6 +57,7 @@ const mainMenuButton = [
             {title: `${PREFIX}kuis`, id: `${PREFIX}kuis`, description: "Jawab kuis pengetahuan umum"},
             {title: `${PREFIX}tebakgambar`, id: `${PREFIX}tebakgambar`, description: "Tebak kata dari gambar yang muncul"},
             {title: `${PREFIX}spin`, id: `${PREFIX}spin`, description: "Pilih sesuatu secara acak dari daftar"},
+            {title: `${PREFIX}blackjack`, id: `${PREFIX}blackjack`, description: "Mainkan Blackjack multiplayer dengan taruhan"},
           ],
         },
         {
@@ -235,6 +236,7 @@ async function sendMenuWithImage(sock, jid, sender, m) {
       `│ ◦ *${PREFIX}kuis*`,
       `│ ◦ *${PREFIX}tebakgambar*`,
       `│ ◦ *${PREFIX}spin*`,
+      `│ ◦ *${PREFIX}blackjack*`,
       `└───────────────`,
       ``,
       `┌─ [ 🕋 *ISLAMI* ]`,

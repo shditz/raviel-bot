@@ -3,6 +3,7 @@ const path = require("path");
 const ffmpeg = require("ffmpeg-static");
 process.env.FFMPEG_PATH = ffmpeg;
 const pino = require("pino");
+const NodeCache = require("node-cache");
 const {
   default: makeWASocket,
   DisconnectReason,
@@ -11,6 +12,7 @@ const {
   makeCacheableSignalKeyStore,
   makeInMemoryStore,
   Browsers,
+  proto,
 } = require("lilys-baileys");
 const config = require("./config");
 const {sendMenuWithImage} = require("./handlers/menu");
@@ -36,9 +38,10 @@ const {normalizeJid, isAdmin} = require("./utils/jid");
 const canvafy = require("canvafy");
 const {TempFileCleanup} = require("./utils/cleanup");
 const {LRUCache} = require("./utils/cache");
+const {CommandLoader} = require("./utils/commandLoader");
+const {MessageBuilder} = require("./utils/messageBuilder");
 
 config.preloadImages().catch((err) => console.error("Failed to preload images:", err.message));
-
 const tempCleanup = new TempFileCleanup();
 tempCleanup.start(600000);
 
@@ -47,14 +50,22 @@ const apiResponseCache = new LRUCache(200, 300000);
 const avatarCache = new Map();
 const AVATAR_CACHE_TTL = 3600000;
 
-const commands = new Map();
-const commandFiles = fs
-  .readdirSync(path.join(__dirname, "commands"))
-  .filter((f) => f.endsWith(".js"));
-for (const file of commandFiles) {
-  const cmd = require(`./commands/${file}`);
-  commands.set(cmd.name, cmd);
+const groupMetadataCache = new NodeCache({stdTTL: 300, checkperiod: 60});
+
+async function getCachedGroupMetadata(sock, jid) {
+  const cached = groupMetadataCache.get(jid);
+  if (cached) return cached;
+  try {
+    const metadata = await sock.groupMetadata(jid);
+    groupMetadataCache.set(jid, metadata);
+    return metadata;
+  } catch {
+    return null;
+  }
 }
+
+const commandLoader = new CommandLoader(path.join(__dirname, "commands"));
+commandLoader.loadAll();
 
 const AUTH_DIR = path.join(__dirname, "auth");
 if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, {recursive: true});
@@ -64,11 +75,13 @@ const logger = pino({level: "fatal"});
 const gameSessions = new Map();
 const userCommandHistory = new Map();
 
+const msgRetryCounterCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
+
 const store = makeInMemoryStore({logger: pino().child({level: "silent", stream: "store"})});
 store.readFromFile("./auth/baileys_store_multi.json");
 setInterval(() => {
   store.writeToFile("./auth/baileys_store_multi.json");
-}, 10_000);
+}, 30_000);
 
 const _origError = console.error;
 const _origWarn = console.warn;
@@ -157,6 +170,157 @@ function extractText(msg) {
   return "";
 }
 
+async function processMessage(sock, m) {
+  if (!m?.message) return;
+
+  const jid = m.key.remoteJid;
+  if (jid === "status@broadcast") return;
+
+  const isGroup = jid.endsWith("@g.us");
+
+  if (isGroup && !isGroupWhitelisted(jid)) return;
+  if (!isGroup && !isBotAllowedInDM()) return;
+
+  const botId = normalizeJid(sock.user.id);
+  let sender = m.key.fromMe ? botId : normalizeJid(m.key.participant || m.key.remoteJid);
+
+  const text = extractText(m.message).trim();
+
+  const {prefix: dbPrefix, maintenance} = getSettings();
+  const currentPrefix = dbPrefix || config.prefix;
+  const isCommand = text && text.startsWith(currentPrefix);
+
+  if (isCommand) {
+    sock.readMessages([m.key]).catch(() => {});
+    sock.sendPresenceUpdate("composing", jid).catch(() => {});
+  }
+
+  if (isGroup && text.match(/(chat\.whatsapp\.com\/)/gi)) {
+    const groupInfo = getGroup(jid) || {};
+    if (groupInfo.antiLink) {
+      const gm = await getCachedGroupMetadata(sock, jid);
+      if (gm && !isAdmin(gm, sender) && isAdmin(gm, botId)) {
+        await sock.sendMessage(jid, {delete: m.key});
+        await sock.sendMessage(jid, {
+          text: MessageBuilder.antiLinkWarn(sender),
+          mentions: [sender],
+        });
+        await sock.groupParticipantsUpdate(jid, [sender], "remove");
+        return;
+      }
+    }
+  }
+
+  const isOwner = sender.startsWith(config.ownerNumber) || m.key.fromMe;
+
+  if (maintenance && !isOwner) {
+    if (isCommand) {
+      await sock.sendMessage(jid, {text: MessageBuilder.MAINTENANCE}, {quoted: m});
+    }
+    return;
+  }
+
+  if (isBanned(sender) && !isOwner) {
+    if (isCommand) {
+      await sock.sendMessage(jid, {text: MessageBuilder.BANNED}, {quoted: m});
+    }
+    return;
+  }
+
+  if (!isCommand) {
+    const session = gameSessions.get(jid);
+    if (session && text) {
+      if (text.toLowerCase() === session.answer.toLowerCase()) {
+        if (session.timeoutId) {
+          clearTimeout(session.timeoutId);
+        }
+
+        const timeTaken = ((Date.now() - session.startTime) / 1000).toFixed(1);
+        await sock.sendMessage(
+          jid,
+          {
+            text: `🎉 *JAWABAN BENAR!*\n\nSelamat @${sender.split("@")[0]}!\n✨ Jawaban: *${session.answer}*\n⏱️ Waktu: ${timeTaken} detik`,
+            mentions: [sender],
+          },
+          {quoted: m},
+        );
+        gameSessions.delete(jid);
+      }
+    }
+    return;
+  }
+
+  const rawCmd = text.slice(currentPrefix.length).trim();
+  if (!rawCmd) return;
+  const args = rawCmd.split(/\s+/);
+  const cmd = args.shift().toLowerCase();
+
+  if (cmd !== "daftar" && cmd !== "register") {
+    if (!isRegistered(sender)) {
+      await sock.sendMessage(
+        jid,
+        {text: MessageBuilder.registerRequired(currentPrefix)},
+        {quoted: m},
+      );
+      return;
+    }
+  }
+
+  const command = commandLoader.get(cmd);
+
+  if (command) {
+    const now = Date.now();
+    const history = userCommandHistory.get(sender) || [];
+    const recentHistory = history.filter((ts) => now - ts < 60000);
+
+    if (recentHistory.length >= 10 && !isOwner) {
+      return await sock.sendMessage(
+        jid,
+        {
+          text: MessageBuilder.rateLimit(sender),
+          mentions: [sender],
+        },
+        {quoted: m},
+      );
+    }
+
+    recentHistory.push(now);
+    userCommandHistory.set(sender, recentHistory);
+
+    try {
+      await command.execute(sock, m, args, {
+        jid,
+        sender,
+        isGroup,
+        botId,
+        PREFIX: currentPrefix,
+        config,
+        getUser,
+        registerUser,
+        isRegistered,
+        getGroup,
+        updateGroup,
+        addWarn,
+        resetWarn,
+        getTotalUsers,
+        getTotalGroups,
+        commands: commandLoader.getAll(),
+        gameSessions,
+        isOwner,
+        cmd,
+      });
+    } catch (err) {
+      await sock.sendMessage(
+        jid,
+        {text: MessageBuilder.INTERNAL_ERROR},
+        {quoted: m},
+      );
+    } finally {
+      sock.sendPresenceUpdate("paused", jid).catch(() => {});
+    }
+  }
+}
+
 async function connectToWhatsApp() {
   const {state, saveCreds} = await useMultiFileAuthState(AUTH_DIR);
 
@@ -173,8 +337,15 @@ async function connectToWhatsApp() {
     syncFullHistory: false,
     markOnlineOnConnect: false,
     generateHighQualityLinkPreview: false,
-    getMessage: async () => {
-      return {conversation: "pesan"};
+    emitOwnEvents: false,                
+    msgRetryCounterCache,               
+    fireInitQueries: false,             
+    getMessage: async (key) => {
+      if (store) {
+        const msg = await store.loadMessage(key.remoteJid, key.id);
+        return msg?.message || undefined;
+      }
+      return proto.Message.fromObject({});
     },
   });
 
@@ -259,7 +430,12 @@ async function connectToWhatsApp() {
       }, 3000);
 
       if (typeof sock.ev.flush === "function") {
-        setTimeout(() => sock.ev.flush(), 2000);
+        setTimeout(() => sock.ev.flush(true), 1000);
+        setInterval(() => {
+          if (sock.ev.isBuffering?.()) {
+            sock.ev.flush(true);
+          }
+        }, 1000);
       }
     }
   });
@@ -267,15 +443,15 @@ async function connectToWhatsApp() {
   sock.ev.on("group-participants.update", async (update) => {
     try {
       const {id, participants, action} = update;
+
+      groupMetadataCache.del(id);
+
       const groupInfo = getGroup(id);
       if (!groupInfo) return;
 
-      let metadata;
-      try {
-        metadata = await sock.groupMetadata(id);
-      } catch {
-        return;
-      }
+      const metadata = await getCachedGroupMetadata(sock, id);
+      if (!metadata) return;
+
       const groupName = metadata.subject;
       const memberCount = metadata.participants.length;
 
@@ -285,25 +461,24 @@ async function connectToWhatsApp() {
         if (!template) continue;
 
         let ppUrl;
-        try {
-          ppUrl = await sock.profilePictureUrl(participant, "image");
-        } catch {
-          ppUrl = "https://i.ibb.co/1s8T3sY/48f7ce63c7aa.jpg";
-        }
-
-        const caption = template
-          .replace(/@user/g, `@${participant.split("@")[0]}`)
-          .replace(/@group/g, groupName);
-
         let cachedPP = avatarCache.get(participant);
         if (cachedPP && cachedPP.expires > Date.now()) {
           ppUrl = cachedPP.url;
         } else {
+          try {
+            ppUrl = await sock.profilePictureUrl(participant, "image");
+          } catch {
+            ppUrl = "https://i.ibb.co/1s8T3sY/48f7ce63c7aa.jpg";
+          }
           avatarCache.set(participant, {
             url: ppUrl,
             expires: Date.now() + AVATAR_CACHE_TTL,
           });
         }
+
+        const caption = template
+          .replace(/@user/g, `@${participant.split("@")[0]}`)
+          .replace(/@group/g, groupName);
 
         const image = await new canvafy.WelcomeLeave()
           .setAvatar(ppUrl)
@@ -331,190 +506,13 @@ async function connectToWhatsApp() {
   sock.ev.on("messages.upsert", async ({messages}) => {
     try {
       if (!messages?.length) return;
-      const m = messages[0];
 
-      const jid = m.key.remoteJid;
-      if (jid === "status@broadcast") return;
-
-      const text = extractText(m.message).trim();
-
-      const isGroup = jid.endsWith("@g.us");
-
-      if (!m?.message) return;
-
-      const botId = normalizeJid(sock.user.id);
-      let sender = m.key.fromMe ? botId : normalizeJid(m.key.participant || m.key.remoteJid);
-
-      if (isGroup && !isGroupWhitelisted(jid)) {
-        return;
-      }
-
-      if (!isGroup && !isBotAllowedInDM()) {
-        return;
-      }
-
-      if (isGroup && text.match(/(chat\.whatsapp\.com\/)/gi)) {
-        const groupInfo = getGroup(jid) || {};
-        if (groupInfo.antiLink) {
-          const gm = await sock.groupMetadata(jid);
-          if (!isAdmin(gm, sender) && isAdmin(gm, botId)) {
-            await sock.sendMessage(jid, {delete: m.key});
-            await sock.sendMessage(jid, {
-              text: `🚫 *PERINGATAN KEAMANAN*\n\nLink terdeteksi dari @${sender.split("@")[0]}. Akses dicabut demi menjaga keamanan grup.`,
-              mentions: [sender],
-            });
-            await sock.groupParticipantsUpdate(jid, [sender], "remove");
-            return;
-          }
-        }
-      }
-
-      const {prefix: dbPrefix, maintenance} = getSettings();
-      const currentPrefix = dbPrefix || config.prefix;
-
-      const isOwner = sender.startsWith(config.ownerNumber) || m.key.fromMe;
-
-      if (maintenance && !isOwner) {
-        if (text.startsWith(currentPrefix)) {
-          await sock.sendMessage(
-            jid,
-            {
-              text: `⚠️ *PEMELIHARAAN SISTEM*\n\nServer kami sedang dalam masa pembaruan. Kami akan segera kembali online. Terima kasih atas kesabaran Anda.`,
-            },
-            {quoted: m},
-          );
-        }
-        return;
-      }
-
-      if (isBanned(sender) && !isOwner) {
-        if (text.startsWith(currentPrefix)) {
-          await sock.sendMessage(
-            jid,
-            {
-              text: `❌ *AKSES DIBATASI*\n\nAkun Anda telah dibatasi dari penggunaan layanan ini karena adanya pelanggaran kebijakan.`,
-            },
-            {quoted: m},
-          );
-        }
-        return;
-      }
-
-      if (!text || !text.startsWith(currentPrefix)) {
-        const session = gameSessions.get(jid);
-        if (session && text) {
-          if (text.toLowerCase() === session.answer.toLowerCase()) {
-            // Clear timeout jika ada
-            if (session.timeoutId) {
-              clearTimeout(session.timeoutId);
-            }
-
-            const timeTaken = ((Date.now() - session.startTime) / 1000).toFixed(1);
-            await sock.sendMessage(
-              jid,
-              {
-                text: `🎉 *JAWABAN BENAR!*\n\nSelamat @${sender.split("@")[0]}!\n✨ Jawaban: *${session.answer}*\n⏱️ Waktu: ${timeTaken} detik`,
-                mentions: [sender],
-              },
-              {quoted: m},
-            );
-            gameSessions.delete(jid);
-          }
-        }
-        return;
-      }
-
-      const rawCmd = text.slice(currentPrefix.length).trim();
-      if (!rawCmd) return;
-      const args = rawCmd.split(/\s+/);
-      const cmd = args.shift().toLowerCase();
-
-      if (cmd !== "daftar" && cmd !== "register") {
-        if (!isRegistered(sender)) {
-          await sock.sendMessage(
-            jid,
-            {
-              text:
-                `📝 *REGISTRASI DIPERLUKAN*\n\n` +
-                `Anda belum terdaftar di database kami. Silakan selesaikan proses registrasi di bawah ini:\n\n` +
-                `┌─────────────────\n` +
-                `│ Format: *${currentPrefix}daftar nama#umur*\n` +
-                `│ Contoh: *${currentPrefix}daftar Budi#17*\n` +
-                `└─────────────────\n\n` +
-                `_Registrasi gratis dan hanya memakan waktu beberapa detik._`,
-            },
-            {quoted: m},
-          );
-          return;
-        }
-      }
-
-      const command =
-        commands.get(cmd) || Array.from(commands.values()).find((c) => c.aliases?.includes(cmd));
-
-      if (command) {
-        // Rate limiting logic
-        const now = Date.now();
-        const history = userCommandHistory.get(sender) || [];
-        const recentHistory = history.filter((ts) => now - ts < 60000);
-
-        if (recentHistory.length >= 10 && !isOwner) {
-          return await sock.sendMessage(
-            jid,
-            {
-              text: `⚠️ *RATE LIMIT TERDETEKSI*\n\nMaaf @${
-                sender.split("@")[0]
-              }, Anda telah mencapai batas penggunaan (10 perintah/menit). Silakan coba lagi dalam beberapa saat agar bot tetap aman.`,
-              mentions: [sender],
-            },
-            {quoted: m},
-          );
-        }
-
-        recentHistory.push(now);
-        userCommandHistory.set(sender, recentHistory);
-
-        // Human-like simulation
-        try {
-          await sock.readMessages([m.key]); // Mark as read
-          await sock.sendPresenceUpdate("composing", jid); // Show typing
-          await delay(1500 + Math.random() * 1500); // Random delay 1.5s - 3s
-          await sock.sendPresenceUpdate("paused", jid); // Stop typing
-        } catch (simErr) {
-          console.error("Simulation error:", simErr.message);
-        }
-
-        try {
-          await command.execute(sock, m, args, {
-            jid,
-            sender,
-            isGroup,
-            botId,
-            PREFIX: currentPrefix,
-            config,
-            getUser,
-            registerUser,
-            isRegistered,
-            getGroup,
-            updateGroup,
-            addWarn,
-            resetWarn,
-            getTotalUsers,
-            getTotalGroups,
-            commands,
-            gameSessions,
-            isOwner,
-            cmd,
-          });
-        } catch (err) {
-          await sock.sendMessage(
-            jid,
-            {
-              text: `❌ *KESALAHAN INTERNAL*\n\nTerjadi kesalahan tak terduga saat menjalankan perintah. Silakan lapor ke administrator jika masalah berlanjut.`,
-            },
-            {quoted: m},
-          );
-        }
+      if (messages.length === 1) {
+        await processMessage(sock, messages[0]);
+      } else {
+        await Promise.allSettled(
+          messages.map((m) => processMessage(sock, m)),
+        );
       }
     } catch (err) {
       if (!err.message?.includes("Bad MAC") && !err.message?.includes("decrypt")) {
